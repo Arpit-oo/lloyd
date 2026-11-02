@@ -1,0 +1,26 @@
+# deps / build
+node_modules/
+.next/
+out/
+dist/
+*.tsbuildinfo
+
+# secrets
+.env
+.env.local
+.env.*.local
+
+# brand package from Magi (not ours to commit, 30 MB)
+wickhold-candidate-package/
+wickhold-candidate-package.zip
+Magi Take-Home Brief.pdf
+
+# runtime data
+data/
+logs/
+
+# os / editor
+.DS_Store
+Thumbs.db
+.vscode/*
+!.vscode/extensions.json
