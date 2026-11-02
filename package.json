@@ -9,7 +9,8 @@
     "lint": "eslint",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "test:keys": "tsx --env-file=.env scripts/test-keys.ts"
+    "test:keys": "tsx --env-file=.env scripts/test-keys.ts",
+    "ingest": "tsx --env-file=.env scripts/ingest.ts"
   },
   "dependencies": {
     "better-sqlite3": "^13.0.3",

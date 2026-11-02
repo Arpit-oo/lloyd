@@ -25,6 +25,8 @@ export interface Block {
   cache?: boolean;
   /** Label shown in the inspector ("brand kernel", "linkedin playbook"...). */
   label?: string;
+  /** Optional image (data URL) sent after the text, low detail. */
+  image?: string;
 }
 
 export interface CallContext {
@@ -89,11 +91,14 @@ export function spentInRun(runId: string): number {
 // ---------- request building ----------
 
 function toContent(blocks: Block[], explicitCache: boolean) {
-  return blocks.map((b) => ({
-    type: "input_text" as const,
-    text: b.text,
-    ...(explicitCache && b.cache ? { prompt_cache_breakpoint: { mode: "explicit" as const } } : {}),
-  }));
+  return blocks.flatMap((b) => [
+    {
+      type: "input_text" as const,
+      text: b.text,
+      ...(explicitCache && b.cache ? { prompt_cache_breakpoint: { mode: "explicit" as const } } : {}),
+    },
+    ...(b.image ? [{ type: "input_image" as const, image_url: b.image, detail: "low" as const }] : []),
+  ]);
 }
 
 function buildParams(req: BaseRequest, model: string, extra: Partial<ResponseCreateParamsNonStreaming> = {}) {
@@ -227,7 +232,10 @@ function log(e: {
   const ctx = e.req.ctx ?? {};
   if (ctx.runId) runSpend().set(ctx.runId, spentInRun(ctx.runId) + e.cost);
   const latency = Date.now() - e.started;
-  const request = { ...e.params, _labels: blockLabels(e.req) };
+  // Image payloads are replaced by a marker so logs stay readable.
+  const request = JSON.parse(JSON.stringify({ ...e.params, _labels: blockLabels(e.req) }, (k, v) =>
+    k === "image_url" && typeof v === "string" && v.startsWith("data:") ? `<image ${Math.round(v.length / 1365)}KB>` : v,
+  ));
 
   db()
     .prepare(

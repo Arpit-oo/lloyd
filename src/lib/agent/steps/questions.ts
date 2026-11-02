@@ -1,0 +1,37 @@
+import type { Brand } from "@/lib/brand";
+import { llm, type CallContext } from "@/lib/llm/client";
+import { brandBlock, campaignBlock } from "../context";
+import { QuestionsSchema, type CampaignData, type Questions } from "../types";
+import type { MemoryForPrompt } from "@/lib/memory/store";
+
+/**
+ * Decides whether to ask anything before planning.
+ * The bar: a question is asked only if its answer would change the asset list, the audience,
+ * the angle or a claim, AND it cannot be answered from the brief, the brand documents or memory.
+ * At most three, each with a default so the user can just say "go with defaults".
+ */
+const RULES = `You decide what to ask a marketer before planning a campaign. Asking costs their time; guessing wrong costs a re-plan.
+
+Ask a question ONLY if both hold:
+1. The answer would change which assets get made, who they target, their main angle, or a claim.
+2. It cannot be answered from the brief, the brand kernel, the brand check decisions, or what the marketer told us before.
+
+Never ask about things the brand documents already settle (voice, approved wording, proof rules). Never ask to confirm a brand-check decision; it is already decided and will be shown to them.
+A detailed brief usually needs zero questions. A vague brief usually needs two or three.
+Maximum three questions. Each needs 2-4 short options and a sensible default.
+List the assumptions you made instead of asking, so the marketer can correct them.`;
+
+export async function decideQuestions(brand: Brand, data: CampaignData, memories: MemoryForPrompt[], ctx: CallContext): Promise<Questions> {
+  const res = await llm.json({
+    step: "questions",
+    tier: "reasoner",
+    effort: "medium",
+    system: [brandBlock(brand, RULES)],
+    input: [campaignBlock(data, memories), { label: "brief text", text: `Original brief:\n"""\n${data.briefText}\n"""\n\nUnclear points noted at intake:\n${data.brief?.unclear.map((u) => `- ${u}`).join("\n") || "none"}` }],
+    schema: QuestionsSchema,
+    schemaName: "questions",
+    cacheKey: `brand:${brand.hash}`,
+    ctx,
+  });
+  return { ...res.data, questions: res.data.questions.slice(0, 3) };
+}
