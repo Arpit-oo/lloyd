@@ -21,7 +21,7 @@ export const WRITER_RULES = `You write marketing assets that a senior marketer a
 - Write for the asset's audience in the brand's voice. Sound like a person, not a template. No filler, no hype words the brand bans.
 - Images: pick at most one image id from the candidates, respecting the brief's image rules and each caution; null if none fits.
 - Fill every field of the schema realistically for the channel (sender, subject, handle, byline, CTA).
-- Links: only URLs that appear in the brand context or the brief. If none fits, use the closest brand URL given; never invent paths. No bracketed placeholders like [address] anywhere: leave a detail out rather than fake it.
+- Links: only URLs that appear in the brand context or the brief, and only where the page matches the link text. If no known URL fits (e.g. no demo-booking page is given), leave the url null; never point a CTA at an unrelated page or invent a path. No bracketed placeholders like [address] anywhere: leave a detail out rather than fake it.
 - Never promise response times, SLAs, support levels, prices, roadmap items or capabilities the context does not state. Describe only what the product does today, in the brand's words.
 - Lead with the strongest TRUE thing for this audience. A status not yet achieved (e.g. a certification in progress) is a supporting fact, never a headline or subject line, unless the marketer explicitly asks for it.`;
 

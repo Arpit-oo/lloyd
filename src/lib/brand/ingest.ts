@@ -74,6 +74,7 @@ export async function ingestBrand(onProgress: Progress = () => {}): Promise<Inge
     fromCache: false,
   };
   setMeta(bdb, "ingest:summary", summary);
+  setMeta(bdb, "ingest:steps", ingestStepCosts(runId));
   onProgress({ step: "done", message: `$${summary.costUSD.toFixed(3)}` });
   return summary;
 
@@ -312,6 +313,24 @@ export function resetSteps(hash: string, steps: RedoStep[]) {
 }
 
 // ---------- helpers ----------
+
+export interface IngestStepCost {
+  step: string;
+  calls: number;
+  inputTokens: number;
+  outputTokens: number;
+  costUSD: number;
+}
+
+/** Cost of each ingest step, kept in the brand index so it travels with a shipped seed. */
+export function ingestStepCosts(runId: string): IngestStepCost[] {
+  return db()
+    .prepare(
+      `SELECT step, COUNT(*) calls, SUM(input_tokens) inputTokens, SUM(output_tokens) outputTokens, SUM(cost_usd) costUSD
+       FROM llm_calls WHERE run_id = ? GROUP BY step ORDER BY costUSD DESC`,
+    )
+    .all(runId) as IngestStepCost[];
+}
 
 function count(bdb: BrandDB, table: string): number {
   return (bdb.prepare(`SELECT COUNT(*) n FROM ${table}`).get() as { n: number }).n;

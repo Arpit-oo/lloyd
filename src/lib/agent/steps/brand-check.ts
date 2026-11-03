@@ -21,7 +21,13 @@ For each requested item:
 Quote the rule verbatim from the evidence (source_quote) and name its document. Higher-authority sources win (tier 1 is highest).
 Give a concrete alternative the campaign can use instead, using the brand's approved wording exactly where it exists.
 A brief's explicit, scoped override (e.g. a product status change effective for this campaign) is legitimate for that subject only; check everything else normally.
-For a "strategy" item, judge whether leading with it still works once the claims are corrected: if the corrected version would lead with a weakness, a status not yet achieved, or an audience the brand treats as out of scope, verdict "needs_change" and propose a stronger lead the evidence supports.
+For a "strategy" item, judge whether leading with it still works once the claims are corrected. Verdict "ok" if the lead stands (execution advice is not a change). Verdict "needs_change" only if the corrected version would lead with a weakness, a status not yet achieved, or an audience the brand treats as out of scope; then propose a stronger lead the evidence supports.
+
+Supported vs. forbidden, and process vs. rule:
+- A product capability or limit that the brand's own product documents, release notes or this brief state is SUPPORTED. Describing it accurately, in the brand's words, needs no further approval.
+- A review step in the brand's process (e.g. "claims go to Legal before publishing", "developer relations checks how-tos") is a workflow note for the humans, not a reason to block or rewrite copy. Mention it at most as a warning.
+- Block only what breaks a rule: banned or wrongly worded claims, facts that contradict a higher-authority source, statements with no support in any brand document or the brief, uncleared customers, expired or unsourced statistics, broken brief constraints, internal numbers in copy.
+So: a key message that restates the product documents is "ok"; a claim that needs a reviewer's sign-off under the brand's process is "ok" with that noted in the rule; "needs_change" means the WORDING must change.
 Do not invent rules. If the evidence does not cover an item, verdict "ok" with rule "No rule found in brand documents".`;
 
 export async function checkBrief(brand: Brand, brief: StructuredBrief, ctx: CallContext): Promise<BrandCheckItem[]> {

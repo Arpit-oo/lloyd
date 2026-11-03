@@ -3,7 +3,7 @@ import { createCampaign, listCampaigns } from "@/lib/agent/store";
 import { json } from "@/lib/http/sse";
 
 export async function GET() {
-  return json(listCampaigns());
+  return json(listCampaigns(currentBrandHash()));
 }
 
 export async function POST() {

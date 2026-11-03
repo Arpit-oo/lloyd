@@ -1,0 +1,22 @@
+{
+  "name": "Memory carries over",
+  "why": "Campaign 1: the marketer corrects the agent's LinkedIn style and finishes. The agent should propose a memory for the lasting preference, and not for anything campaign-specific. Campaign 2: a new chat should use it, and its LinkedIn posts should follow it.",
+  "sequence": [
+    {
+      "run": {
+        "briefFile": "wickhold-candidate-package/candidate/briefs/brief-2-awareness-push.md",
+        "edits": ["The LinkedIn posts are too long and salesy. Make them shorter and plainer, and drop the hashtags, we never use hashtags on LinkedIn."],
+        "finish": true,
+        "acceptMemories": true
+      },
+      "expect": { "memoriesAccepted": { "min": 1 } }
+    },
+    {
+      "run": { "briefFile": "wickhold-candidate-package/candidate/briefs/brief-3-regulated-teams-push.md" },
+      "expect": {
+        "memoriesUsed": { "min": 1 },
+        "assetsMustNotContain": [{ "pattern": "\"hashtags\":\\[\"", "why": "remembered preference: no hashtags on LinkedIn" }]
+      }
+    }
+  ]
+}

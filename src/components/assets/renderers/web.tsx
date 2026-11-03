@@ -173,7 +173,7 @@ function LandingSection({ section: s, vars, alt }: { section: z.infer<typeof Lan
           ))}
         </ol>
       ) : s.kind === "limits" ? (
-        <ul className="mt-6 space-y-3 rounded-lg border-l-4 bg-white/60 p-6" style={{ borderColor: vars.primary }}>
+        <ul className="mt-6 space-y-3 rounded-lg bg-white/60 p-6 ring-1 ring-black/10">
           {s.items.map((it, j) => (
             <li key={j}>
               <span className="font-semibold">{it.title}.</span> <span className="opacity-80">{it.body}</span>

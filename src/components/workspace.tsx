@@ -36,16 +36,19 @@ export function Workspace() {
     loadCampaigns().catch(() => {});
   }, [loadBrand, loadCampaigns]);
 
-  useEffect(() => {
-    if (activeId) loadView(activeId);
-    else setView(null);
-    setSelectedAsset(null);
-  }, [activeId, loadView]);
+  const openCampaign = useCallback(
+    async (id: string) => {
+      setActiveId(id);
+      setSelectedAsset(null);
+      await loadView(id);
+    },
+    [loadView],
+  );
 
   const newCampaign = async () => {
     const c = await sendJSON<CampaignListItem>("/api/campaigns", "POST");
     await loadCampaigns();
-    setActiveId(c.id);
+    await openCampaign(c.id);
   };
 
   const send = async (text: string) => {
@@ -53,7 +56,7 @@ export function Workspace() {
     if (!id) {
       const c = await sendJSON<CampaignListItem>("/api/campaigns", "POST");
       id = c.id;
-      setActiveId(id);
+      await openCampaign(id);
     }
     setBusy(true);
     setStatus("Thinking");
@@ -104,7 +107,7 @@ export function Workspace() {
           <ul className="min-h-0 flex-1 space-y-0.5 overflow-y-auto px-2 pb-3">
             {campaigns.map((c) => (
               <li key={c.id}>
-                <button onClick={() => setActiveId(c.id)} className={`w-full rounded-lg px-3 py-2 text-left ${c.id === activeId ? "bg-white shadow-sm ring-1 ring-line" : "hover:bg-white/60"}`}>
+                <button onClick={() => openCampaign(c.id)} className={`w-full rounded-lg px-3 py-2 text-left ${c.id === activeId ? "bg-white shadow-sm ring-1 ring-line" : "hover:bg-white/60"}`}>
                   <div className="truncate text-[13px] font-medium">{c.title}</div>
                   <div className="text-[11px] text-muted">{STATE_LABEL[c.state] ?? c.state}</div>
                 </button>

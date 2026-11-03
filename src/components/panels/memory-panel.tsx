@@ -84,7 +84,7 @@ export function MemoryPanel({ onClose }: { onClose: () => void }) {
             </section>
           ) : null,
         )}
-        {!mems.length && <div className="text-sm text-muted">Nothing remembered yet. When you finish a campaign (“we're done”), I'll suggest what to keep.</div>}
+        {!mems.length && <div className="text-sm text-muted">Nothing remembered yet. When you finish a campaign (“we&apos;re done”), I&apos;ll suggest what to keep.</div>}
       </div>
     </Modal>
   );

@@ -161,8 +161,10 @@ async function writeItems(brand: Brand, t: Turn, items: PlanItem[]) {
   // Warm the cache once per asset type (kernel + campaign + playbook, with that type's output
   // schema, which is part of the cached prefix), so the parallel writers all read from it.
   t.status(`Writing ${items.length} asset${items.length > 1 ? "s" : ""}`);
+  // A type with one asset gains nothing from a prewarm (it would write the same prefix itself).
+  const repeated = [...new Set(items.map((i) => i.type))].filter((type) => items.filter((i) => i.type === type).length > 1);
   await Promise.all(
-    [...new Set(items.map((i) => i.type))].map(async (type) => {
+    repeated.map(async (type) => {
       const { system, channel } = await writerPrefix(brand, data, memories, type, t.ctx);
       await llm.prewarm({ step: `write:${type}:prewarm`, tier: "writer", system, input: [channel.block], schema: ASSET_SCHEMAS[type], schemaName: type, cacheKey: `brand:${brand.hash}`, ctx: t.ctx });
     }),
@@ -242,10 +244,15 @@ async function edit(brand: Brand, t: Turn, assetIds: string[], instruction: stri
       const ctx = { ...t.ctx, assetId: id };
       t.status(`Editing ${asset.title}`);
       const edited = await editAsset(brand, data, memories, current.content, instruction, ctx);
-      const version = store.addVersion(id, { content: edited.content, sources: current.sources, instruction });
+      let version = store.addVersion(id, { content: edited.content, sources: current.sources, instruction });
       const item = data.plan?.items.find((i) => i.id === asset.plan_item_id);
-      const guard = item ? await guardAsset(brand, data, item, edited.content, ctx) : null;
+      let guard = item ? await guardAsset(brand, data, item, edited.content, ctx) : null;
       if (guard) store.setVersionGuard(id, version, guard);
+      // An edit can introduce a problem (e.g. a punchier subject that overclaims); repair it the same way.
+      if (item && guard?.status === "block") {
+        guard = await autoFix(brand, data, memories, item, id, edited.content, current.sources, guard, ctx, t);
+        version = store.getAsset(id)!.current_version;
+      }
       t.emit({ type: "asset", assetId: id });
       return { assetId: id, title: asset.title, summary: edited.summary, version, guard: guard?.status ?? null };
     }),

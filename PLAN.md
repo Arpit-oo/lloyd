@@ -1,5 +1,7 @@
 # PLAN: Brand-Aware Campaign Agent (Magi take-home)
 
+> This is the original plan from day 1, kept as written. What was actually built, and why it changed, is in DECISIONS.md and NOTES.md.
+
 Started 2026-11-02. Budget: 4 days. Source brief: `Magi Take-Home Brief.pdf`. Sample brand: `wickhold-candidate-package/candidate/`.
 
 > North star: *"We care more about how you think than how much you build."*

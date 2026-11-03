@@ -1,55 +1,50 @@
 /**
- * Runs one brief end to end without the UI, exactly as a user would in chat.
+ * Runs one brief end to end without the UI and prints what the agent did.
  * Usage:
- *   npm run brief -- <brief.md> [--answers "text" | --defaults] [--plan-change "text"] [--edit "text"] [--finish]
- * Prints the agent's turns, the plan, each asset's guard result, and cost per step.
+ *   npm run brief -- <brief.md> [--answers "text"] [--plan-change "text"] [--edit "text"]... [--finish [--accept-memories]]
  */
 import fs from "node:fs";
-import { requireBrand } from "@/lib/brand";
-import { handleMessage, type AgentEvent } from "@/lib/agent/agent";
+import { assetToText, ASSET_LABEL, type AssetContent } from "@/lib/agent/asset-types";
+import type { AgentEvent } from "@/lib/agent/agent";
 import * as store from "@/lib/agent/store";
-import { assetToText, ASSET_LABEL } from "@/lib/agent/asset-types";
 import type { GuardReport } from "@/lib/agent/steps/guard";
-import type { Plan, Questions, BrandCheckItem } from "@/lib/agent/types";
-import { db } from "@/lib/db";
+import type { BrandCheckItem, Plan, Questions } from "@/lib/agent/types";
+import { runCampaign } from "@/lib/eval/runner";
 
-const arg = (name: string) => (process.argv.includes(name) ? process.argv[process.argv.indexOf(name) + 1] : undefined);
+const args = process.argv.slice(2);
+const arg = (name: string) => (args.includes(name) ? args[args.indexOf(name) + 1] : undefined);
+const all = (name: string) => args.flatMap((a, i) => (a === name ? [args[i + 1]] : []));
 
 async function main() {
-  const file = process.argv[2];
-  if (!file || !fs.existsSync(file)) throw new Error("Usage: npm run brief -- <brief.md> [--defaults|--answers text] [--plan-change text] [--edit text] [--finish]");
-  const brand = requireBrand();
-  const campaign = store.createCampaign(brand.hash, "New campaign");
-  console.log(`Campaign ${campaign.id}\n`);
+  const briefFile = args[0];
+  if (!briefFile || !fs.existsSync(briefFile)) throw new Error("Usage: npm run brief -- <brief.md> [--answers text] [--plan-change text] [--edit text]... [--finish [--accept-memories]]");
 
-  await turn(campaign.id, fs.readFileSync(file, "utf8"), "BRIEF");
+  let label = "";
+  const result = await runCampaign(
+    { briefFile, answers: arg("--answers"), planChange: arg("--plan-change"), edits: all("--edit"), finish: args.includes("--finish"), acceptMemories: args.includes("--accept-memories") },
+    (turn, e: AgentEvent) => {
+      if (turn !== label) console.log(`\n━━ ${(label = turn).toUpperCase()} ━━`);
+      if (e.type === "status") console.log(`  … ${e.text}`);
+      if (e.type === "message" && e.message.role === "assistant") printMessage(e.message.kind, e.message.content as Record<string, unknown>);
+    },
+  );
 
-  if (store.getCampaign(campaign.id)!.state === "clarifying") {
-    await turn(campaign.id, arg("--answers") ?? "Go with your defaults.", "ANSWERS");
+  for (const a of store.listAssets(result.campaignId)) {
+    const v = store.getVersion(a.id, a.current_version);
+    const g = v?.guard as GuardReport | null;
+    console.log(`\n### ${a.title} (${ASSET_LABEL[a.type]}, v${a.current_version}) check=${g?.status ?? a.status}`);
+    g?.issues.forEach((i) => console.log(`   ! [${i.severity}] "${i.quote.slice(0, 80)}" -> ${i.problem}`));
+    if (v) console.log(assetToText(v.content as AssetContent).slice(0, 900).replace(/^/gm, "   | "));
   }
-  if (arg("--plan-change")) await turn(campaign.id, arg("--plan-change")!, "PLAN CHANGE");
-  if (store.getCampaign(campaign.id)!.state === "plan_review") await turn(campaign.id, "Looks good, write it.", "APPROVE");
-
-  printAssets(campaign.id);
-  if (arg("--edit")) {
-    await turn(campaign.id, arg("--edit")!, "EDIT");
-    printAssets(campaign.id, true);
+  if (result.acceptedMemories.length) {
+    console.log("\n━━ MEMORY ACCEPTED ━━");
+    result.acceptedMemories.forEach((m) => console.log(`  + [${m.type}] ${m.text}`));
   }
-  if (process.argv.includes("--finish")) await turn(campaign.id, "We're done with this campaign.", "FINISH");
 
-  printCosts(campaign.id);
-}
-
-async function turn(campaignId: string, text: string, label: string) {
-  console.log(`\n━━ ${label} ━━`);
-  const started = Date.now();
-  let cost = 0;
-  await handleMessage(campaignId, text, (e: AgentEvent) => {
-    if (e.type === "status") console.log(`  … ${e.text}`);
-    if (e.type === "message" && e.message.role === "assistant") printMessage(e.message.kind, e.message.content as Record<string, unknown>);
-    if (e.type === "done") cost = e.costUSD;
-  });
-  console.log(`  (${((Date.now() - started) / 1000).toFixed(1)}s, $${cost.toFixed(4)})`);
+  const c = result.cost;
+  console.log(`\n━━ COST ━━ campaign $${result.initialRunUSD.toFixed(4)} | total $${c.totalUSD.toFixed(4)} | in ${c.inputTokens} (cached ${Math.round(c.cacheHitRate * 100)}%) | out ${c.outputTokens}`);
+  result.edits.forEach((e) => console.log(`  edit "${e.instruction.slice(0, 50)}": $${e.costUSD.toFixed(4)}, changed ${e.touched.length} asset(s)`));
+  for (const s of c.byStep) console.log(`  ${s.step.padEnd(28)} x${String(s.calls).padEnd(3)} in ${String(s.inputTokens).padStart(7)} cached ${String(s.cachedTokens).padStart(7)} out ${String(s.outputTokens).padStart(6)}  $${s.costUSD.toFixed(4)}`);
 }
 
 function printMessage(kind: string, c: Record<string, unknown>) {
@@ -57,46 +52,19 @@ function printMessage(kind: string, c: Record<string, unknown>) {
   if (kind === "brand_check")
     for (const i of c.items as BrandCheckItem[]) console.log(`  [${i.verdict.toUpperCase()}] ${i.requested}\n      rule: ${i.rule} (${i.source_doc ?? "-"})${i.alternative ? `\n      instead: ${i.alternative}` : ""}`);
   if (kind === "questions") {
-    const q = c as unknown as Questions & { memoriesUsed: number };
+    const q = c as unknown as Questions & { memoriesUsed?: number };
+    if (q.memoriesUsed) console.log(`  using ${q.memoriesUsed} memories`);
     q.questions.forEach((x) => console.log(`  Q: ${x.question}\n     why: ${x.why}\n     default: ${x.default}`));
     q.assumptions.forEach((a) => console.log(`  assume: ${a}`));
-    if (q.memoriesUsed) console.log(`  using ${q.memoriesUsed} memories`);
   }
   if (kind === "plan") {
     const p = c.plan as Plan;
     console.log(`  PLAN: ${p.summary}\n  mix: ${p.mix_rationale}`);
     p.items.forEach((i, n) => console.log(`   ${n + 1}. [${i.id}] ${ASSET_LABEL[i.type]} | ${i.title} | ${i.audience} | ${i.publish_date ?? "-"}${i.research_question ? " | research" : ""}`));
   }
-  if (kind === "assets") console.log(`  assets: ${JSON.stringify(c.guard)}${(c.failed as string[]).length ? ` failed: ${(c.failed as string[]).join("; ")}` : ""}`);
-  if (kind === "edit") (c.results as { title: string; summary: string; guard: string }[]).forEach((r) => console.log(`  edited ${r.title}: ${r.summary} [guard ${r.guard}]`));
+  if (kind === "assets") console.log(`  written: ${JSON.stringify(c.guard)}${(c.failed as string[]).length ? ` failed: ${(c.failed as string[]).join("; ")}` : ""}`);
+  if (kind === "edit") (c.results as { title: string; summary: string; guard: string }[]).forEach((r) => console.log(`  edited ${r.title}: ${r.summary} [check ${r.guard}]`));
   if (kind === "memory") console.log(`  proposed memories: ${(c.proposedIds as string[]).length}`);
-}
-
-function printAssets(campaignId: string, onlyEdited = false) {
-  for (const a of store.listAssets(campaignId)) {
-    if (onlyEdited && a.current_version < 2) continue;
-    const v = store.getVersion(a.id, a.current_version);
-    if (!v) {
-      console.log(`\n### ${a.title}: ${a.status}`);
-      continue;
-    }
-    const g = v.guard as GuardReport | null;
-    console.log(`\n### ${a.title} (${ASSET_LABEL[a.type]}, v${v.version}) guard=${g?.status ?? "?"}`);
-    g?.issues.forEach((i) => console.log(`   ! [${i.severity}] "${i.quote.slice(0, 80)}" -> ${i.problem}`));
-    console.log(assetToText(v.content).slice(0, 1200).replace(/^/gm, "   | "));
-  }
-}
-
-function printCosts(campaignId: string) {
-  const rows = db()
-    .prepare(
-      `SELECT step, COUNT(*) n, SUM(input_tokens) i, SUM(cached_tokens) c, SUM(cache_write_tokens) w, SUM(output_tokens) o, SUM(cost_usd) usd
-       FROM llm_calls WHERE campaign_id = ? GROUP BY step ORDER BY usd DESC`,
-    )
-    .all(campaignId) as { step: string; n: number; i: number; c: number; w: number; o: number; usd: number }[];
-  const tot = rows.reduce((a, r) => ({ i: a.i + r.i, c: a.c + r.c, o: a.o + r.o, usd: a.usd + r.usd }), { i: 0, c: 0, o: 0, usd: 0 });
-  console.log(`\n━━ COST ━━  total $${tot.usd.toFixed(4)} | in ${tot.i} (cached ${tot.c}, ${((tot.c / Math.max(1, tot.i)) * 100).toFixed(0)}%) | out ${tot.o}`);
-  for (const r of rows) console.log(`  ${r.step.padEnd(24)} x${String(r.n).padEnd(3)} in ${String(r.i).padStart(7)} cached ${String(r.c).padStart(7)} out ${String(r.o).padStart(6)}  $${r.usd.toFixed(4)}`);
 }
 
 main().catch((e) => {

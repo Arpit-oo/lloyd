@@ -1,0 +1,21 @@
+{
+  "name": "Brief 2: vague awareness push",
+  "why": "A vague brief with no assets, dates or audience. The agent should ask a few sharp questions with defaults, then propose a small mix.",
+  "run": {
+    "briefFile": "wickhold-candidate-package/candidate/briefs/brief-2-awareness-push.md",
+    "edits": ["Make the blog post title more direct"]
+  },
+  "expect": {
+    "questions": { "min": 2, "max": 3 },
+    "planItems": { "min": 3, "max": 9 },
+    "maxBlockedAssets": 0,
+    "editTouches": 1,
+    "editNote": "The plan for this brief usually has no email, so the edit targets the blog. Asked for a missing asset, the agent correctly asks which one is meant.",
+    "assetsMustNotContain": [
+      { "pattern": "(?i)\\bTallowatch\\b|Wickhold Security\\b", "why": "retired names" },
+      { "pattern": "(?i)Every workload\\. Always watched", "why": "retired tagline" },
+      { "pattern": "(?i)Field Report 202[34]", "why": "expired statistics source" },
+      { "pattern": "(?i)300\\+? customers", "why": "unapproved customer count" }
+    ]
+  }
+}

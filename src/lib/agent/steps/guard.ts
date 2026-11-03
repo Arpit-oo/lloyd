@@ -40,6 +40,14 @@ Read the asset and find real problems only:
 - brief constraints broken (including image rules); internal targets in copy
 - clear voice violations (banned words, wrong tone for the audience)
 Judge what the text asserts, not word matches: "we are not X" does not claim X. Approved wording used exactly is fine.
+
+Supported vs. forbidden, and process vs. rule:
+- A product capability or limit that the brand's own product documents, release notes or this brief state is SUPPORTED. Describing it accurately, in the brand's words, needs no further approval.
+- A review step in the brand's process (e.g. "claims go to Legal before publishing", "developer relations checks how-tos") is a workflow note for the humans, not a reason to block or rewrite copy. Mention it at most as a warning.
+- Missing details the brand documents do not supply (a link target, an address, a sender) are warnings for the human to fill in, never blocks.
+- Craft and completeness (a recommended point left out, section order, a weaker opening than the plan intended) are warnings. Block means the asset must not be published as is.
+- Block only what breaks a rule: banned or wrongly worded claims, facts that contradict a higher-authority source, statements with no support in any brand document or the brief, uncleared customers, expired or unsourced statistics, broken brief constraints, internal numbers in copy.
+
 Quote the exact offending text. If the asset is clean, return no issues.`;
 
 const LIMITS: Partial<Record<AssetContent["type"], (a: AssetContent) => GuardIssue[]>> = {

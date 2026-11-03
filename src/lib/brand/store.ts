@@ -1,12 +1,14 @@
 import fs from "node:fs";
 import path from "node:path";
+import zlib from "node:zlib";
 import Database from "better-sqlite3";
 import { getConfig } from "@/lib/config";
 
 /**
  * Each brand gets its own SQLite file keyed by a hash of the brand folder's contents.
  * - Changing any brand file changes the hash, so a stale index is never used by accident.
- * - The file can be shipped as a seed (seed/brands/<hash>.db) so a fresh clone opens instantly.
+ * - The file can be shipped as a gzipped seed (seed/brands/<hash>.db.gz, made by `npm run seed`)
+ *   so a fresh clone opens instantly.
  */
 export type BrandDB = Database.Database;
 
@@ -75,8 +77,9 @@ export function brandDbPath(hash: string) {
   return path.join(getConfig().dataDir, "brands", `${hash}.db`);
 }
 
+/** Shipped seeds are gzipped (the index is mostly embeddings) and unpacked on first use. */
 export function seedDbPath(hash: string) {
-  return path.join(getConfig().rootDir, "seed", "brands", `${hash}.db`);
+  return path.join(getConfig().rootDir, "seed", "brands", `${hash}.db.gz`);
 }
 
 export function openBrandDb(hash: string): BrandDB {
@@ -85,7 +88,7 @@ export function openBrandDb(hash: string): BrandDB {
   const file = brandDbPath(hash);
   fs.mkdirSync(path.dirname(file), { recursive: true });
   // Fresh clone + unchanged sample brand: start from the shipped seed instead of re-ingesting.
-  if (!fs.existsSync(file) && fs.existsSync(seedDbPath(hash))) fs.copyFileSync(seedDbPath(hash), file);
+  if (!fs.existsSync(file) && fs.existsSync(seedDbPath(hash))) fs.writeFileSync(file, zlib.gunzipSync(fs.readFileSync(seedDbPath(hash))));
   const conn = new Database(file);
   conn.pragma("journal_mode = WAL");
   conn.exec(SCHEMA);

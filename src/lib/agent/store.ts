@@ -53,8 +53,10 @@ export function getCampaign(id: string): CampaignRow | null {
   return r ? { ...r, data: JSON.parse(r.data_json) } : null;
 }
 
-export function listCampaigns(): Pick<CampaignRow, "id" | "title" | "state" | "updated_at">[] {
-  return db().prepare("SELECT id, title, state, updated_at FROM campaigns ORDER BY updated_at DESC").all() as Pick<CampaignRow, "id" | "title" | "state" | "updated_at">[];
+export function listCampaigns(brandHash: string): Pick<CampaignRow, "id" | "title" | "state" | "updated_at">[] {
+  return db()
+    .prepare("SELECT id, title, state, updated_at FROM campaigns WHERE brand_hash = ? ORDER BY updated_at DESC")
+    .all(brandHash) as Pick<CampaignRow, "id" | "title" | "state" | "updated_at">[];
 }
 
 export function updateCampaign(id: string, patch: { state?: CampaignState; title?: string; data?: Partial<CampaignData> }) {

@@ -1,0 +1,24 @@
+{
+  "name": "Brief 1: detailed GA launch",
+  "why": "A complete brief. The agent should barely ask anything, keep the 11-asset shape unless it argues otherwise, apply the GA override only to Leashgate's status, and respect every ban in the brief.",
+  "run": {
+    "briefFile": "wickhold-candidate-package/candidate/briefs/brief-1-leashgate-ga-launch.md",
+    "edits": ["Shorten the second LinkedIn post"]
+  },
+  "expect": {
+    "questions": { "max": 1 },
+    "planItems": { "min": 9, "max": 12 },
+    "maxBlockedAssets": 0,
+    "editTouches": 1,
+    "assetsMustNotContain": [
+      { "pattern": "(?i)\\bTallowatch\\b", "why": "retired product name" },
+      { "pattern": "(?i)Lowmoor|Ostler", "why": "other products' customer proof must not appear on Leashgate assets" },
+      { "pattern": "(?i)\\bSLA\\b|uptime guarantee|support level", "why": "brief: say nothing about SLAs or support" },
+      { "pattern": "(?i)apiVersion", "why": "brief: leave out the apiVersion line" },
+      { "pattern": "\\$\\s?\\d", "why": "brief: no price for Leashgate" },
+      { "pattern": "(?i)\\b\\d+\\s?ms\\b|milliseconds", "why": "brief: no latency figure" },
+      { "pattern": "ui-leashgate-", "why": "brief: early access console screenshots stay off every asset" },
+      { "pattern": "(?i)coming soon|roadmap", "why": "brief: no roadmap" }
+    ]
+  }
+}

@@ -39,7 +39,12 @@ async function main() {
 
   const bdb = openBrandDb(summary.hash);
   const gov = getMeta<Governance>(bdb, "governance");
-  console.log(`\n${summary.fromCache ? "Loaded from cache" : "Built"} in ${((Date.now() - t0) / 1000).toFixed(1)}s, cost $${summary.costUSD.toFixed(3)}`);
+  const took = `${((Date.now() - t0) / 1000).toFixed(1)}s`;
+  console.log(
+    summary.fromCache
+      ? `\nLoaded from cache in ${took} (no API calls; the original ingest cost $${summary.costUSD.toFixed(3)})`
+      : `\nBuilt in ${took}, cost $${summary.costUSD.toFixed(3)}`,
+  );
   console.log(`${summary.docs} docs, ${summary.chunks} chunks, ${summary.facts} facts, ${summary.conflicts} conflicts, ${summary.usableImages}/${summary.images} images usable`);
   if (summary.skippedFiles.length) console.log(`Skipped (unsupported): ${summary.skippedFiles.join(", ")}`);
 
