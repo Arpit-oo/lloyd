@@ -159,13 +159,19 @@ async function text(req: BaseRequest): Promise<LLMResult<string>> {
  * following fan-out of parallel calls all read from cache instead of all missing.
  * No-op on models without explicit caching.
  */
-async function prewarm(req: Omit<BaseRequest, "input"> & { input?: Block[] | string }): Promise<void> {
+async function prewarm(
+  req: Omit<BaseRequest, "input"> & { input?: Block[] | string; schema?: z.ZodType; schemaName?: string },
+): Promise<void> {
   const model = modelFor(req.tier);
   if (!capsFor(model).explicitCache) return;
-  const params = buildParams({ ...req, step: `${req.step}:prewarm`, input: req.input ?? "." }, model, {
+  // The output schema is part of the cached prefix, so a prewarm must use the same schema
+  // as the calls it warms up for, or they will not read from it.
+  const format = req.schema ? { text: { format: zodTextFormat(req.schema, req.schemaName ?? "out") } } : {};
+  const params = buildParams({ ...req, input: req.input ?? "." }, model, {
     prompt_cache_options: { mode: "explicit", prewarm: true },
+    ...format,
   });
-  await execute({ ...req, step: `${req.step}:prewarm`, input: req.input ?? "." }, model, params, (t) => t);
+  await execute({ ...req, input: req.input ?? "." }, model, params, (t) => t);
 }
 
 export const llm = { json, text, prewarm };

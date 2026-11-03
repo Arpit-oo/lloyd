@@ -3,7 +3,7 @@ import { getConfig } from "@/lib/config";
 import { embed } from "@/lib/llm/embed";
 import { buildDocCard, type DocCard } from "./cards";
 import { chunkMarkdown, estimateTokens } from "./chunk";
-import { auditGroups, groupFacts, mergeGroups, renderGovernance, resolveConflicts, type FactForConflict } from "./conflicts";
+import { auditGroups, compactResolutions, groupFacts, mergeGroups, renderGovernance, resolveConflicts, type FactForConflict, type StoredConflict } from "./conflicts";
 import { buildEntityRegistry, type Entity } from "./entities";
 import { extractDesignTokens } from "./design-tokens";
 import { extractFacts } from "./facts";
@@ -55,6 +55,7 @@ export async function ingestBrand(onProgress: Progress = () => {}): Promise<Inge
   const governance = await step("governance", () => buildGovernance(bdb, ctx));
   await step("facts", () => buildFacts(bdb, scan, ctx, onProgress));
   await step("conflicts", () => buildConflicts(bdb, governance, ctx, onProgress));
+  compactStoredConflicts(bdb);
   const entities = await step("entities", () => buildEntities(bdb, ctx));
   await step("kernel", () => buildKernel(bdb, governance, entities, ctx));
   await step("images", () => buildImages(bdb, scan, ctx, onProgress));
@@ -167,13 +168,24 @@ async function buildConflicts(bdb: BrandDB, governance: Governance, ctx: { runId
   const groups = mergeGroups(similar, audit);
   onProgress({ step: "conflicts", message: `${facts.length} facts -> ${similar.length} similarity groups + ${audit.length} audit groups` });
   const resolved = await resolveConflicts(groups, governance, ctx, (d, t) => onProgress({ step: "conflicts", done: d, total: t }));
+  writeConflicts(bdb, resolved.map((r) => ({ resolution: r.resolution, factIds: r.facts.map((f) => f.id) })));
+  setMeta(bdb, "conflicts:done", true);
+}
+
+/** Merges duplicate resolutions and rewrites the conflicts table. Idempotent, no model calls. */
+function compactStoredConflicts(bdb: BrandDB) {
+  const rows = bdb.prepare("SELECT fact_ids_json, resolution_json FROM conflicts").all() as { fact_ids_json: string; resolution_json: string }[];
+  writeConflicts(bdb, rows.map((r) => ({ factIds: JSON.parse(r.fact_ids_json), resolution: JSON.parse(r.resolution_json) })));
+}
+
+function writeConflicts(bdb: BrandDB, items: StoredConflict[]) {
+  const tiers = new Map((bdb.prepare("SELECT id, tier FROM docs").all() as { id: string; tier: number }[]).map((d) => [d.id, d.tier]));
   const ins = bdb.prepare("INSERT INTO conflicts (id, topic, fact_ids_json, resolution_json, needs_user) VALUES (?,?,?,?,?)");
   bdb.transaction(() => {
     bdb.exec("DELETE FROM conflicts");
-    resolved.forEach(({ resolution, facts: fs }, i) =>
-      ins.run(`conflict_${i + 1}`, resolution.topic, JSON.stringify(fs.map((f) => f.id)), JSON.stringify(resolution), resolution.needs_user ? 1 : 0),
+    compactResolutions(items, (id) => tiers.get(id.split("#")[0]) ?? 99).forEach((c, i) =>
+      ins.run(`conflict_${i + 1}`, c.resolution.topic, JSON.stringify(c.factIds), JSON.stringify(c.resolution), c.resolution.needs_user ? 1 : 0),
     );
-    setMeta(bdb, "conflicts:done", true);
   })();
 }
 
@@ -260,12 +272,43 @@ async function buildDesignTokens(bdb: BrandDB, scan: BrandScan, ctx: { runId: st
   const rows = bdb
     .prepare(
       `SELECT c.doc_id, c.heading_path, c.text, d.tier FROM chunks_fts f JOIN chunks c ON c.id = f.rowid JOIN docs d ON d.id = c.doc_id
-       WHERE chunks_fts MATCH 'hex OR color OR colour OR typeface OR font OR logo OR palette' ORDER BY d.tier, rank LIMIT 14`,
+       WHERE chunks_fts MATCH 'hex OR color OR colour OR typeface OR typography OR font OR logo OR palette OR tagline' AND d.tier <= 2 ORDER BY d.tier, rank LIMIT 24`,
     )
     .all() as { doc_id: string; heading_path: string; text: string; tier: number }[];
   const passages = rows.map((r) => `[tier ${r.tier} | ${r.heading_path}]\n${r.text}`).join("\n\n---\n\n");
   const tokens = await extractDesignTokens(passages, scan.images.map((i) => i.filename), ctx);
   setMeta(bdb, "design_tokens", tokens);
+}
+
+/**
+ * Forgets the output of the named steps (and the finished marker) so the next ingest redoes
+ * only them. Later steps that depend on them must be listed too (e.g. conflicts -> kernel).
+ */
+export const REDOABLE = ["cards", "governance", "facts", "conflicts", "entities", "kernel", "image-rules", "vision", "design-tokens"] as const;
+export type RedoStep = (typeof REDOABLE)[number];
+
+export function resetSteps(hash: string, steps: RedoStep[]) {
+  const bdb = openBrandDb(hash);
+  bdb.transaction(() => {
+    bdb.prepare("DELETE FROM meta WHERE key = 'ingest:summary'").run();
+    for (const s of steps) {
+      if (s === "cards") bdb.prepare("UPDATE docs SET card_json = NULL").run();
+      if (s === "governance") bdb.prepare("DELETE FROM meta WHERE key = 'governance'").run();
+      if (s === "facts") {
+        bdb.prepare("DELETE FROM facts").run();
+        bdb.prepare("DELETE FROM meta WHERE key LIKE 'facts:%'").run();
+      }
+      if (s === "conflicts") {
+        bdb.prepare("DELETE FROM conflicts").run();
+        bdb.prepare("DELETE FROM meta WHERE key = 'conflicts:done'").run();
+      }
+      if (s === "entities") bdb.prepare("DELETE FROM meta WHERE key = 'entities'").run();
+      if (s === "kernel") bdb.prepare("DELETE FROM meta WHERE key = 'kernel'").run();
+      if (s === "image-rules") bdb.prepare("UPDATE images SET rules_json = NULL, usable = 1").run();
+      if (s === "vision") bdb.prepare("UPDATE images SET caption = NULL, embedding = NULL").run();
+      if (s === "design-tokens") bdb.prepare("DELETE FROM meta WHERE key = 'design_tokens'").run();
+    }
+  })();
 }
 
 // ---------- helpers ----------

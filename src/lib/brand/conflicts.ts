@@ -160,6 +160,43 @@ export async function resolveConflicts(
   return results.flat().filter((r) => r.resolution.is_conflict && r.facts.length);
 }
 
+/**
+ * The audit pairs many low-tier claims with the same authoritative rule, so one real conflict
+ * ("no dates in Leashgate claims") can come back ten times. Resolutions that share the same
+ * most authoritative winning facts are merged into one, keeping every loser and the most confident explanation.
+ */
+export interface StoredConflict {
+  resolution: Resolution;
+  factIds: string[];
+}
+
+export function compactResolutions(items: StoredConflict[], tierOf: (factId: string) => number = () => 0): StoredConflict[] {
+  const RANK = { high: 0, medium: 1, low: 2 } as const;
+  const byWinners = new Map<string, StoredConflict>();
+  for (const item of items) {
+    // Key on the most authoritative winners only: the model sometimes also lists agreeing
+    // lower-tier facts as winners, which would otherwise keep duplicates apart.
+    const winners = item.resolution.winner_fact_ids;
+    const top = Math.min(...winners.map(tierOf));
+    const key = winners.filter((w) => tierOf(w) === top).sort().join("|") || `topic:${item.resolution.topic.toLowerCase()}`;
+    const prev = byWinners.get(key);
+    if (!prev) {
+      byWinners.set(key, item);
+      continue;
+    }
+    const best = RANK[item.resolution.confidence] < RANK[prev.resolution.confidence] ? item : prev;
+    byWinners.set(key, {
+      factIds: [...new Set([...prev.factIds, ...item.factIds])],
+      resolution: {
+        ...best.resolution,
+        loser_fact_ids: [...new Set([...prev.resolution.loser_fact_ids, ...item.resolution.loser_fact_ids])],
+        needs_user: prev.resolution.needs_user || item.resolution.needs_user,
+      },
+    });
+  }
+  return [...byWinners.values()];
+}
+
 export function renderGovernance(g: Governance): string {
   const tiers = g.tiers
     .sort((a, b) => a.rank - b.rank)

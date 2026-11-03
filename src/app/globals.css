@@ -1,26 +1,93 @@
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
-
+/* App chrome stays neutral so the brand's own look in the asset previews stands out. */
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --font-sans: var(--font-app-sans);
+  --font-mono: var(--font-app-mono);
+  --color-ink: #1c1917;
+  --color-muted: #78716c;
+  --color-line: #e7e5e4;
+  --color-panel: #fafaf9;
+  --color-accent: #4338ca;
+  --color-accent-soft: #eef2ff;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
-}
-
+html,
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background: #f5f5f4;
+  color: var(--color-ink);
+  font-family: var(--font-app-sans), system-ui, sans-serif;
+}
+
+/* Scrollbars that don't shout. */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #d6d3d1 transparent;
+}
+
+/* Markdown inside asset previews inherits the brand's fonts from the preview root. */
+.prose-brand h2 {
+  font-size: 1.5rem;
+  line-height: 1.25;
+  font-weight: 700;
+  margin: 2rem 0 0.75rem;
+  font-family: var(--brand-display);
+}
+.prose-brand h3 {
+  font-size: 1.15rem;
+  font-weight: 700;
+  margin: 1.5rem 0 0.5rem;
+  font-family: var(--brand-display);
+}
+.prose-brand p {
+  margin: 0 0 1rem;
+  line-height: 1.7;
+}
+.prose-brand ul,
+.prose-brand ol {
+  margin: 0 0 1rem 1.25rem;
+  line-height: 1.7;
+}
+.prose-brand ul {
+  list-style: disc;
+}
+.prose-brand ol {
+  list-style: decimal;
+}
+.prose-brand a {
+  color: var(--brand-primary);
+  text-decoration: underline;
+}
+.prose-brand pre {
+  background: var(--brand-ink);
+  color: #f5f5f4;
+  padding: 1rem 1.25rem;
+  border-radius: 8px;
+  overflow-x: auto;
+  font-family: var(--brand-mono);
+  font-size: 0.85rem;
+  margin: 0 0 1.25rem;
+}
+.prose-brand code {
+  font-family: var(--brand-mono);
+  font-size: 0.9em;
+}
+.prose-brand :not(pre) > code {
+  background: rgba(0, 0, 0, 0.06);
+  padding: 0.1em 0.35em;
+  border-radius: 4px;
+}
+.prose-brand blockquote {
+  border-left: 3px solid var(--brand-primary);
+  padding-left: 1rem;
+  margin: 0 0 1rem;
+  font-style: italic;
+}
+
+@keyframes pulse-dot {
+  0%, 100% { opacity: 0.3; }
+  50% { opacity: 1; }
+}
+.typing-dot {
+  animation: pulse-dot 1.2s infinite;
 }

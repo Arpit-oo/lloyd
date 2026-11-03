@@ -20,7 +20,16 @@ export const WRITER_RULES = `You write marketing assets that a senior marketer a
 - Third-party statistics: only from the verified research list, with publisher, date and link as the brand requires.
 - Write for the asset's audience in the brand's voice. Sound like a person, not a template. No filler, no hype words the brand bans.
 - Images: pick at most one image id from the candidates, respecting the brief's image rules and each caution; null if none fits.
-- Fill every field of the schema realistically for the channel (sender, subject, handle, byline, CTA url placeholders like https://<brand-domain>/...).`;
+- Fill every field of the schema realistically for the channel (sender, subject, handle, byline, CTA).
+- Links: only URLs that appear in the brand context or the brief. If none fits, use the closest brand URL given; never invent paths. No bracketed placeholders like [address] anywhere: leave a detail out rather than fake it.
+- Never promise response times, SLAs, support levels, prices, roadmap items or capabilities the context does not state. Describe only what the product does today, in the brand's words.
+- Lead with the strongest TRUE thing for this audience. A status not yet achieved (e.g. a certification in progress) is a supporting fact, never a headline or subject line, unless the marketer explicitly asks for it.`;
+
+/** The cached prefix shared by every asset of one type: identical for the prewarm and the writes. */
+export async function writerPrefix(brand: Brand, data: CampaignData, memories: MemoryForPrompt[], type: PlanItem["type"], ctx: CallContext) {
+  const channel = await channelBlock(brand, type, ctx);
+  return { system: [brandBlock(brand, WRITER_RULES), campaignBlock(data, memories)], channel };
+}
 
 export interface WriteResult {
   content: AssetContent;
@@ -29,8 +38,8 @@ export interface WriteResult {
 }
 
 export async function writeAsset(brand: Brand, data: CampaignData, memories: MemoryForPrompt[], item: PlanItem, ctx: CallContext): Promise<WriteResult> {
-  const [channel, images, web] = await Promise.all([
-    channelBlock(brand, item.type, ctx),
+  const [{ system, channel }, images, web] = await Promise.all([
+    writerPrefix(brand, data, memories, item.type, ctx),
     item.image_brief ? imageCandidates(brand, item.type, item.image_brief, ctx) : Promise.resolve([]),
     item.research_question ? research(item.research_question, ctx) : Promise.resolve({ findings: [], rejected: [] }),
   ]);
@@ -42,7 +51,7 @@ export async function writeAsset(brand: Brand, data: CampaignData, memories: Mem
     step: `write:${item.type}`,
     tier: "writer",
     effort: "medium",
-    system: [brandBlock(brand, WRITER_RULES), campaignBlock(data, memories)],
+    system,
     input: [channel.block, asset.block, { label: "task", text: `Write the ${ASSET_LABEL[item.type]} "${item.title}" (plan item ${item.id}) now.` }],
     schema,
     schemaName: item.type,

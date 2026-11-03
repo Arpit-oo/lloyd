@@ -29,3 +29,11 @@ Running log. Feeds the "where an AI tool led me wrong" section of DECISIONS.md.
 - External critique #2 estimated ingest at "several dollars" and suggested captioning only blank images. Measured costs say otherwise; see above. Agreed with its other points: ship a seed cache for the sample brand, check the cache before any network call, and keep campaign-scoped overrides out of memory by construction (excluded by id), not only by prompt wording.
 - First full ingest (2026-11-02): $1.71, 12 min, 2,292 facts. Governance came out explicit/high-confidence. Gaps found and fixed in code (not yet re-run): similarity grouping missed the sales-deck "FedRAMP Authorized" claim (cosine < 0.8 to the legal fact) -> added directed stale-claim audit; renames (Tallowatch -> Evenburn) missed -> added entity registry; kernel said stats had no expiry -> pass valid_until; image-rules parser read "Internal production, all channels" as internal-only (15 good images excluded) -> prompt separates provenance from restriction.
 - My mistake, twice: a stray `cat > file` with no heredoc blocked a shell on stdin. Also a Python patch turned "\n" into a real newline inside JS strings.
+
+## Day 2 (2026-11-03)
+
+- Brief 3 run 1: brand check caught FedRAMP + Vaskell (quote, result, and the anonymised variant) with sources. But the agent fixed the wording and kept the strategy: every asset led with the corrected FedRAMP sentence (email subject = that sentence), and it asked zero questions although its centerpiece was removed. Fix: intake records the lead angle; brand check judges the lead against ICP/persona/positioning; questions must ask when the centerpiece is removed.
+- Guard caught writer invention (HIPAA control mapping feature, a response-time SLA, a [postal address] placeholder). Added a one-round automatic fix (patch edit + re-check) and stricter writer rules.
+- Cache finding: the structured-output schema is part of the cached prefix. A prewarm without the schema is never read by schema calls. Now prewarm once per asset type with that type's schema and playbook. Run 1 hit rate was 25%.
+- Run 1 cost: $0.30 for six assets end to end, $0.022 for an edit.
+- Tool note: the shell wrapper mis-parses apostrophes inside heredocs; write scripts with the file tool instead.

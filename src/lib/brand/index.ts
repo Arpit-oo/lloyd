@@ -1,5 +1,6 @@
 import { getConfig } from "@/lib/config";
 import type { DesignTokens } from "./design-tokens";
+import type { Entity } from "./entities";
 import type { Governance } from "./governance";
 import { scanBrand } from "./scan";
 import { getMeta, openBrandDb, type BrandDB } from "./store";
@@ -14,6 +15,7 @@ export interface Brand {
   kernel: string;
   governance: Governance;
   tokens: DesignTokens | null;
+  entities: Entity[];
 }
 
 const g = globalThis as unknown as { __brandHash?: string };
@@ -34,6 +36,7 @@ export function getBrand(): Brand | null {
     kernel: getMeta<string>(bdb, "kernel") ?? "",
     governance: getMeta<Governance>(bdb, "governance")!,
     tokens: getMeta<DesignTokens>(bdb, "design_tokens"),
+    entities: getMeta<Entity[]>(bdb, "entities") ?? [],
   };
 }
 

@@ -1,5 +1,6 @@
 import { z } from "zod";
 import type { Brand } from "@/lib/brand";
+import { findFormerNames } from "@/lib/brand/entities";
 import { isImageAllowed, type ImageRules } from "@/lib/brand/images";
 import { searchFacts } from "@/lib/brand/retrieve";
 import { llm, type CallContext } from "@/lib/llm/client";
@@ -59,6 +60,10 @@ export async function guardAsset(brand: Brand, data: CampaignData, item: PlanIte
   for (const target of data.brief?.internal_targets ?? []) {
     const numbers = target.match(/\d[\d,.]*/g) ?? [];
     for (const n of numbers) if (n.length >= 2 && text.includes(n)) issues.push({ check: "rule", quote: n, problem: "An internal target appears in copy", rule: `Internal target: "${target}"`, source_doc: "brief", severity: "block", fix: "Remove the internal number." });
+  }
+
+  for (const hit of findFormerNames(text, brand.entities)) {
+    issues.push({ check: "rule", quote: hit.found, problem: `Former name "${hit.found}" used`, rule: `Current name is ${hit.entity.current_name}${hit.entity.former_name_rule ? ` (${hit.entity.former_name_rule})` : ""}`, source_doc: hit.entity.source_doc, severity: "block", fix: `Use "${hit.entity.current_name}".` });
   }
 
   const imageId = imageIdOf(content);

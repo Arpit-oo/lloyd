@@ -21,10 +21,12 @@ For each requested item:
 Quote the rule verbatim from the evidence (source_quote) and name its document. Higher-authority sources win (tier 1 is highest).
 Give a concrete alternative the campaign can use instead, using the brand's approved wording exactly where it exists.
 A brief's explicit, scoped override (e.g. a product status change effective for this campaign) is legitimate for that subject only; check everything else normally.
-Do not invent rules. If the evidence doesn't cover an item, verdict "ok" with rule "No rule found in brand documents".`;
+For a "strategy" item, judge whether leading with it still works once the claims are corrected: if the corrected version would lead with a weakness, a status not yet achieved, or an audience the brand treats as out of scope, verdict "needs_change" and propose a stronger lead the evidence supports.
+Do not invent rules. If the evidence does not cover an item, verdict "ok" with rule "No rule found in brand documents".`;
 
 export async function checkBrief(brand: Brand, brief: StructuredBrief, ctx: CallContext): Promise<BrandCheckItem[]> {
   const items = [
+    ...(brief.lead_angle ? [`strategy: lead the campaign with "${brief.lead_angle}" for ${brief.audiences.map((a) => a.name).join(" and ")}`] : []),
     ...brief.requested_claims.map((c) => `${c.kind}: ${c.text} (brief says: "${c.brief_quote}")`),
     ...brief.requested_assets.filter((a) => a.type === "other").map((a) => `asset outside allowed types: ${a.description}`),
   ];
@@ -32,9 +34,14 @@ export async function checkBrief(brand: Brand, brief: StructuredBrief, ctx: Call
 
   const evidence = await Promise.all(
     items.map(async (item) => {
+      const strategic = item.startsWith("strategy:");
       const [facts, chunks] = await Promise.all([
         searchFacts(brand.db, item, 8, ctx),
-        searchBrand(brand.db, item, { maxTier: 2, limit: 3 }, ctx),
+        // A strategy is judged against who the brand sells to and how it positions itself,
+        // not only against legal rules.
+        strategic
+          ? searchBrand(brand.db, item, { docTypes: ["persona", "messaging", "brand_guidelines", "legal_claims"], limit: 5 }, ctx)
+          : searchBrand(brand.db, item, { maxTier: 2, limit: 3 }, ctx),
       ]);
       return `## Requested: ${item}\nFacts:\n${facts.map((f) => `- [${f.docId}, tier ${f.tier}] ${f.statement} | quote: "${f.quote}"`).join("\n")}\nPassages:\n${chunks.map((c) => `[${c.docId} | ${c.headingPath} | tier ${c.tier}]\n${c.text.slice(0, 1800)}`).join("\n\n")}`;
     }),

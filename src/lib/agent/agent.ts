@@ -3,7 +3,6 @@ import { db, newId } from "@/lib/db";
 import { llm, type CallContext } from "@/lib/llm/client";
 import { proposeMemories } from "@/lib/memory/extract";
 import { markUsed, memoriesForPrompt } from "@/lib/memory/store";
-import { brandBlock, campaignBlock } from "./context";
 import * as store from "./store";
 import { checkBrief } from "./steps/brand-check";
 import { editAsset } from "./steps/editor";
@@ -12,7 +11,8 @@ import { readBrief } from "./steps/intake";
 import { proposePlan, revisePlan } from "./steps/planner";
 import { decideQuestions } from "./steps/questions";
 import { routeMessage } from "./steps/router";
-import { WRITER_RULES, writeAsset } from "./steps/writer";
+import { writeAsset, writerPrefix } from "./steps/writer";
+import { ASSET_SCHEMAS, type AssetContent } from "./asset-types";
 import type { CampaignData, PlanItem } from "./types";
 
 /**
@@ -158,9 +158,15 @@ async function writeItems(brand: Brand, t: Turn, items: PlanItem[]) {
   const rows = items.map((item, i) => store.createAsset(t.campaignId, item.id, offset + i, item.type, item.title));
   rows.forEach((r) => t.emit({ type: "asset", assetId: r.id }));
 
-  // Write the shared prefix (brand kernel + campaign) to cache once, so the parallel writers all hit it.
+  // Warm the cache once per asset type (kernel + campaign + playbook, with that type's output
+  // schema, which is part of the cached prefix), so the parallel writers all read from it.
   t.status(`Writing ${items.length} asset${items.length > 1 ? "s" : ""}`);
-  await llm.prewarm({ step: "write:prewarm", tier: "writer", system: [brandBlock(brand, WRITER_RULES), campaignBlock(data, memories)], cacheKey: `brand:${brand.hash}`, ctx: t.ctx });
+  await Promise.all(
+    [...new Set(items.map((i) => i.type))].map(async (type) => {
+      const { system, channel } = await writerPrefix(brand, data, memories, type, t.ctx);
+      await llm.prewarm({ step: `write:${type}:prewarm`, tier: "writer", system, input: [channel.block], schema: ASSET_SCHEMAS[type], schemaName: type, cacheKey: `brand:${brand.hash}`, ctx: t.ctx });
+    }),
+  );
 
   const results = await Promise.allSettled(
     items.map(async (item, i) => {
@@ -169,9 +175,10 @@ async function writeItems(brand: Brand, t: Turn, items: PlanItem[]) {
       const written = await writeAsset(brand, data, memories, item, ctx);
       const version = store.addVersion(row.id, { content: written.content, sources: written.sources });
       t.emit({ type: "asset", assetId: row.id });
-      const guard = await guardAsset(brand, data, item, written.content, ctx);
+      let guard = await guardAsset(brand, data, item, written.content, ctx);
       store.setVersionGuard(row.id, version, guard);
       t.emit({ type: "asset", assetId: row.id });
+      if (guard.status === "block") guard = await autoFix(brand, data, memories, item, row.id, written.content, written.sources, guard, ctx, t);
       t.status(`Done: ${item.title}`);
       return guard;
     }),
@@ -190,6 +197,37 @@ async function writeItems(brand: Brand, t: Turn, items: PlanItem[]) {
     guard: summarizeGuards(guards),
     assetIds: rows.map((r) => r.id),
   });
+}
+
+/**
+ * One targeted repair pass for blocking guard issues. The fix is a patch edit, so one bad
+ * sentence does not cost a full rewrite; the result is checked again and kept as a new version.
+ */
+async function autoFix(
+  brand: Brand,
+  data: CampaignData,
+  memories: ReturnType<typeof memoriesForPrompt>,
+  item: PlanItem,
+  assetId: string,
+  content: AssetContent,
+  sources: unknown,
+  guard: GuardReport,
+  ctx: CallContext,
+  t: Turn,
+): Promise<GuardReport> {
+  const blocking = guard.issues.filter((i) => i.severity === "block");
+  const list = blocking.map((i) => `- "${i.quote}": ${i.problem}. Rule: ${i.rule}. Fix: ${i.fix}`).join("\n");
+  t.status(`Fixing ${blocking.length} issue${blocking.length > 1 ? "s" : ""} in ${item.title}`);
+  try {
+    const fixed = await editAsset(brand, data, memories, content, `Fix these problems found by the brand check, changing as little as possible:\n${list}`, ctx);
+    const version = store.addVersion(assetId, { content: fixed.content, sources, instruction: `Automatic fix: ${blocking.map((i) => i.problem).join("; ")}` });
+    const next = await guardAsset(brand, data, item, fixed.content, ctx);
+    store.setVersionGuard(assetId, version, next);
+    t.emit({ type: "asset", assetId });
+    return next;
+  } catch {
+    return guard;
+  }
 }
 
 async function edit(brand: Brand, t: Turn, assetIds: string[], instruction: string) {

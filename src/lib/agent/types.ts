@@ -45,6 +45,7 @@ export const StructuredBriefSchema = z.object({
     }),
   ),
   primary_cta: z.string().nullable(),
+  lead_angle: z.string().nullable().describe("What the brief says the campaign should lead with or center on (headline idea, centerpiece story), close to verbatim. Null if not stated."),
   unclear: z.array(z.string()).describe("Things a planner would need that the brief does not say."),
 });
 export type StructuredBrief = z.infer<typeof StructuredBriefSchema>;
@@ -71,7 +72,7 @@ export const QuestionsSchema = z.object({
       question: z.string(),
       why: z.string().describe("What in the plan changes depending on the answer."),
       options: z.array(z.string()).describe("2-4 short answer options."),
-      default: z.string().describe("The answer the agent will assume if the user says 'use defaults'."),
+      default: z.string().describe("The answer the agent will assume if the user says use defaults. Must be one of the options."),
     }),
   ),
   assumptions: z.array(z.string()).describe("Things the agent decided without asking, stated so the user can correct them."),
