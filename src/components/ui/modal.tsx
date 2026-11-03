@@ -53,7 +53,7 @@ export function Modal({ title, subtitle, onClose, children, size = "full" }: {
         aria-modal="true"
         aria-labelledby={titleId}
         data-glass
-        className={`flex w-[95vw] max-w-6xl flex-col overflow-hidden rounded-2xl border border-line bg-panel shadow-2xl ${size === "full" ? "h-[90vh]" : "max-h-[90vh]"}`}
+        className={`flex w-[95vw] max-w-6xl flex-col overflow-hidden rounded-2xl border border-line bg-paper shadow-2xl [.wall_&]:bg-panel ${size === "full" ? "h-[90vh]" : "max-h-[90vh]"}`}
       >
         <div className="flex shrink-0 items-start justify-between gap-4 border-b border-line bg-surface px-6 py-4">
           <div className="min-w-0">

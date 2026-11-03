@@ -22,6 +22,15 @@ export interface OutgoingMessage {
   text: string;
   attachmentIds?: string[];
   models?: ModelSettings;
+  /** Shown next to the message in shared chats. */
+  author?: string;
+}
+
+/** A per-tab id for presence: two tabs (or two people) on one campaign count as two viewers. */
+export function tabId(): string {
+  let id = sessionStorage.getItem("lloyd-tab");
+  if (!id) sessionStorage.setItem("lloyd-tab", (id = Math.random().toString(36).slice(2, 10)));
+  return id;
 }
 
 /** POSTs a chat message and calls `onEvent` for every server-sent event until the stream ends. */
@@ -29,7 +38,7 @@ export async function streamMessage(campaignId: string, msg: OutgoingMessage, on
   const res = await fetch(`/api/campaigns/${campaignId}/messages`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(msg),
+    body: JSON.stringify({ ...msg, tab: tabId() }),
   });
   if (!res.ok || !res.body) {
     onEvent({ type: "error", text: (await res.json().catch(() => null))?.error ?? `Request failed (${res.status})` });

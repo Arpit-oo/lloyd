@@ -101,4 +101,10 @@ export const MIGRATIONS: string[] = [
     created_at  TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
   );
   `,
+
+  // v4: images as design references: kind, and the design settings the image suggests.
+  `
+  ALTER TABLE attachments ADD COLUMN kind TEXT NOT NULL DEFAULT 'document';
+  ALTER TABLE attachments ADD COLUMN style_json TEXT;
+  `,
 ];

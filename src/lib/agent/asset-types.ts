@@ -1,4 +1,5 @@
 import { z } from "zod";
+import type { AssetStyle } from "./design";
 
 /**
  * The four allowed asset families, five concrete formats. Each schema mirrors how the asset looks
@@ -7,6 +8,9 @@ import { z } from "zod";
  */
 export const ASSET_TYPES = ["linkedin_post", "x_post", "email", "blog_post", "landing_page"] as const;
 export type AssetType = (typeof ASSET_TYPES)[number];
+
+/** Asset types that can take a free-form (AI-written HTML) design. */
+export const FREEFORM_TYPES: readonly AssetType[] = ["landing_page", "blog_post", "email"];
 
 export const ASSET_LABEL: Record<AssetType, string> = {
   linkedin_post: "LinkedIn post",
@@ -103,15 +107,30 @@ export const ASSET_SCHEMAS = {
   landing_page: LandingSchema,
 } as const;
 
-export type AssetContent =
+export type { AssetStyle } from "./design";
+
+export type AssetContent = (
   | { type: "linkedin_post"; data: z.infer<typeof LinkedInSchema> }
   | { type: "x_post"; data: z.infer<typeof XSchema> }
   | { type: "email"; data: z.infer<typeof EmailSchema> }
   | { type: "blog_post"; data: z.infer<typeof BlogSchema> }
-  | { type: "landing_page"; data: z.infer<typeof LandingSchema> };
+  | { type: "landing_page"; data: z.infer<typeof LandingSchema> }
+) & {
+  /** Design settings changed in chat or taken from a design reference (see design.ts). */
+  style?: AssetStyle;
+  /**
+   * Free-form design: a complete HTML page written by the model, shown in a sandbox instead of
+   * the template. The structured `data` stays the source of truth for the copy.
+   */
+  html?: string;
+  /** What the marketer asked the free-form design to look like, reused when the copy is edited. */
+  freeformPrompt?: string;
+};
 
 /** Flattens an asset to plain text, for the claim guard and length checks. */
 export function assetToText(a: AssetContent): string {
+  // A free-form page is checked as displayed: its visible text, not the template copy.
+  if (a.html) return htmlText(a.html);
   switch (a.type) {
     case "linkedin_post":
       return `${a.data.text}\n${a.data.hashtags.map((h) => `#${h.replace(/^#/, "")}`).join(" ")}`;
@@ -125,4 +144,21 @@ export function assetToText(a: AssetContent): string {
       return [a.data.hero.eyebrow ?? "", a.data.hero.headline, a.data.hero.subhead, a.data.hero.primary_cta, a.data.hero.secondary_cta ?? "",
         ...a.data.sections.map((s) => [s.heading, s.intro ?? "", ...s.items.map((i) => `${i.title}: ${i.body}`), s.code ?? ""].join("\n")), a.data.footer_note ?? ""].join("\n\n");
   }
+}
+
+/** Visible text of an HTML page (scripts and styles removed, tags stripped). */
+export function htmlText(html: string): string {
+  return html
+    .replace(/<(script|style)[\s\S]*?<\/\1>/gi, " ")
+    .replace(/<br\s*\/?>|<\/(p|div|h[1-6]|li|section|tr)>/gi, "\n")
+    .replace(/<[^>]+>/g, " ")
+    .replace(/&nbsp;/g, " ")
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/[ \t]+/g, " ")
+    .replace(/\n\s*\n+/g, "\n\n")
+    .trim();
 }

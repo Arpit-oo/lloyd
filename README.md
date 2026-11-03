@@ -4,6 +4,7 @@ A local chat app where a marketer and an AI agent plan and write a campaign for 
 
 Chat on the left, assets on the right: LinkedIn and X posts, emails, blog posts and landing pages, rendered the way they'd look when published, in the brand's own colors and fonts. Every model call is logged with its exact prompt, tokens, cache hits and cost.
 
+- Full user guide (what it does, chat editing, how to test): [GUIDE.md](GUIDE.md)
 - How it works and why: [DECISIONS.md](DECISIONS.md)
 - What it costs: [COSTS.md](COSTS.md)
 - Build log, including where AI tools led me wrong: [NOTES.md](NOTES.md)
@@ -42,6 +43,12 @@ It works like the chat apps you know: a sidebar of campaigns (searchable, groupe
 - **Inspector**: every call's exact prompt, block by block with cache breakpoints, and the cost by step.
 
 Each asset also has **Checks**, **Sources** and **Prompt** tabs.
+
+**Share and export** (the Share button in a campaign's header):
+- **Work on a chat together.** Anyone on the same network opens the link shown there (this machine's LAN address plus `?c=<campaign>`). Everyone sees new messages, the live step-by-step progress, and asset drafts as they stream, and messages are labelled with the sender's name. People take turns: while Lloyd works on one person's message, nobody else can send until it finishes (the server refuses a second message with a 409). Avatars in the header show who else has the chat open. There are no accounts, so anyone on the network can use the app and its OpenAI key: share only on a trusted network.
+- **Export** the conversation, brand check, plan and the latest version of every asset as Markdown (download or copy), or everything as JSON.
+
+While Lloyd works, the chat shows the current step with a running clock; "N steps done" expands the timeline, with how long each step took.
 
 ## Scripts
 

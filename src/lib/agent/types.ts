@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { ASSET_TYPES } from "./asset-types";
+import type { StyleRequest } from "./design";
 
 /**
  * Campaign lifecycle. The agent is an explicit state machine: each user message is routed to an
@@ -119,5 +120,12 @@ export interface CampaignData {
   /** Model picker choice for this campaign. */
   models?: import("@/lib/llm/catalog").ModelSettings;
   /** Files the marketer attached after the brief, used as reference material. */
-  references?: { name: string; text: string }[];
+  /** Documents, images and links the marketer sent as references (see references.ts). */
+  references?: { name: string; text: string; kind?: "document" | "image" | "link"; style?: StyleRequest }[];
+  /** Design suggested by the latest image or link reference; new web assets and emails start from it. */
+  referenceStyle?: StyleRequest;
+  /** An edit waiting for the marketer to confirm, because it goes against the brand (see confirm.ts). */
+  pendingEdit?: import("./confirm").PendingEdit | null;
+  /** Brand voice/style exceptions the marketer confirmed for this campaign. Legal rules are never overridden. */
+  voiceOverrides?: string[];
 }

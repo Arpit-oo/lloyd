@@ -28,6 +28,8 @@ export function Wallpaper({ scene, cell = 13, className = "", fps = 24 }: { scen
       el.height = Math.round(h * dpr);
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
       state = createScene(scene, Math.ceil(w / (cell * 0.62)), Math.ceil(h / cell));
+      // Resizing clears the canvas; with reduced motion there is no loop to repaint it.
+      if (still) drawScene(ctx, scene, state, 4, w, h, cell);
     };
     resize();
     const ro = new ResizeObserver(resize);
@@ -42,8 +44,7 @@ export function Wallpaper({ scene, cell = 13, className = "", fps = 24 }: { scen
       last = now;
       drawScene(ctx, scene, state, (now - start) / 1000, w, h, cell);
     };
-    if (still) drawScene(ctx, scene, state, 4, w, h, cell);
-    else raf = requestAnimationFrame(frame);
+    if (!still) raf = requestAnimationFrame(frame);
 
     return () => {
       cancelAnimationFrame(raf);

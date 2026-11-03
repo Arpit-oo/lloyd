@@ -1,23 +1,38 @@
 import { handleMessage } from "@/lib/agent/agent";
-import { endRun, isRunning, startRun } from "@/lib/agent/runs";
+import { endRun, isRunning, recordRunEvent, runInfo, startRun } from "@/lib/agent/runs";
 import type { ModelSettings } from "@/lib/llm/catalog";
 import { json, sseResponse } from "@/lib/http/sse";
 
 /**
  * Sends a chat message to the agent and streams its progress back as server-sent events.
  * The run is registered so the Stop button can abort it, and it survives the client leaving.
+ *
+ * In a shared chat only one message runs at a time: a second sender gets 409 with the name of
+ * the person whose message is being worked on, and can send once it finishes.
  */
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const body = (await req.json()) as { text?: string; attachmentIds?: string[]; models?: ModelSettings };
+  const body = (await req.json()) as { text?: string; attachmentIds?: string[]; models?: ModelSettings; author?: string; tab?: string };
   const text = (body.text ?? "").trim();
+  const author = (body.author ?? "").trim().slice(0, 40);
   if (!text && !body.attachmentIds?.length) return json({ error: "Message is empty" }, 400);
-  if (isRunning(id)) return json({ error: "The agent is still working on this campaign. Stop it first or wait." }, 409);
+  if (isRunning(id)) {
+    const who = runInfo(id)?.author;
+    return json({ error: `Lloyd is still working on ${who ? `${who}'s` : "the last"} message. Wait for it to finish, or stop it first.` }, 409);
+  }
 
-  const ctrl = startRun(id);
+  const ctrl = startRun(id, author, (body.tab ?? "").slice(0, 20));
   return sseResponse(async (send) => {
     try {
-      await handleMessage(id, text, send, { signal: ctrl.signal, attachmentIds: body.attachmentIds, models: body.models });
+      await handleMessage(
+        id,
+        text,
+        (e) => {
+          recordRunEvent(id, e as { type: string; text?: string; assetId?: string });
+          send(e);
+        },
+        { signal: ctrl.signal, attachmentIds: body.attachmentIds, models: body.models, author },
+      );
     } finally {
       endRun(id, ctrl);
     }

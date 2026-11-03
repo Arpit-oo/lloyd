@@ -4,10 +4,16 @@ import { resolveModels, type ModelSettings } from "@/lib/llm/catalog";
 import { llm, type CallContext } from "@/lib/llm/client";
 import { proposeMemories } from "@/lib/memory/extract";
 import { markUsed, memoriesForPrompt } from "@/lib/memory/store";
-import { getAttachments, linkAttachments, renderAttachments } from "./attachments";
+import { getAttachments, linkAttachments, renderAttachments, toReferences } from "./attachments";
+import { mergeStyle } from "./design";
+import { readNewLinks, referenceUrls, type Reference } from "./references";
+import { brandLook } from "./steps/editor";
 import * as store from "./store";
 import { checkBrief } from "./steps/brand-check";
+import { CONFIRM_REPLIES } from "./confirm";
 import { editAsset } from "./steps/editor";
+import { checkEditRequest } from "./steps/request-check";
+import { generateFreeform } from "./steps/freeform";
 import { guardAsset, type GuardReport } from "./steps/guard";
 import { readBrief } from "./steps/intake";
 import { proposePlan, revisePlan } from "./steps/planner";
@@ -42,6 +48,8 @@ export interface MessageOptions {
   attachmentIds?: string[];
   /** Model picker choice; saved on the campaign and used from this turn on. */
   models?: ModelSettings;
+  /** Display name of the person who sent it (shared chats show who said what). */
+  author?: string;
 }
 
 export async function handleMessage(campaignId: string, text: string, emit: Emit, opts: MessageOptions = {}): Promise<void> {
@@ -55,17 +63,58 @@ export async function handleMessage(campaignId: string, text: string, emit: Emit
 
   const files = getAttachments(opts.attachmentIds ?? []);
   if (files.length) linkAttachments(files.map((f) => f.id), campaignId);
-  t.say("user", "text", { text, attachments: files.map((f) => ({ id: f.id, name: f.name, size: f.size })) });
+  t.say("user", "text", { text, attachments: files.map((f) => ({ id: f.id, name: f.name, size: f.size })), ...(opts.author ? { author: opts.author } : {}) });
 
   try {
+    // References: images and links always; documents too once the brief is in (before that, a
+    // document is the brief). Links are read now, so every later step can use them.
+    const docs = files.filter((f) => f.kind !== "image");
+    const refs: Reference[] = toReferences(campaign.state === "new" ? files.filter((f) => f.kind === "image") : files);
+    const urls = referenceUrls(text);
+    if (urls.length) {
+      t.status(`Reading ${urls.length > 1 ? `${urls.length} reference links` : "the reference link"}`);
+      const { pages, failed } = await readNewLinks(urls, campaign.data.references ?? [], ctx);
+      refs.push(...pages);
+      if (failed.length) t.reply(`I couldn't open ${failed.join(", ")}, so I'll work without ${failed.length > 1 ? "them" : "it"}.`);
+    }
+    if (refs.length) {
+      const designed = [...refs].reverse().find((r) => r.style);
+      store.updateCampaign(campaignId, {
+        data: { references: [...(campaign.data.references ?? []), ...refs], ...(designed ? { referenceStyle: designed.style } : {}) },
+      });
+      t.status(`Using ${refs.length} reference${refs.length > 1 ? "s" : ""}: ${refs.map((r) => r.name).join(", ").slice(0, 120)}`);
+    }
+
     if (campaign.state === "new") {
-      // An attached file can be the brief, or add to a typed one.
-      const brief = [text, renderAttachments(files)].filter((s) => s.trim()).join("\n\n");
+      // An attached document can be the brief, or add to a typed one.
+      const brief = [text, renderAttachments(docs)].filter((s) => s.trim()).join("\n\n");
+      if (!brief.trim()) {
+        // Only images: keep them as references and ask for the brief itself.
+        t.reply("Got your reference. Now tell me about the campaign: paste or attach the brief, or describe what you're launching, for whom, and which assets you need.");
+        return;
+      }
       await startFromBrief(brand, t, brief);
     } else {
-      if (files.length) {
-        const refs = [...(campaign.data.references ?? []), ...files.map((f) => ({ name: f.name, text: f.text }))];
-        store.updateCampaign(campaignId, { data: { references: refs } });
+      // A reply to "this goes against the brand, are you sure?"
+      const pending = campaign.data.pendingEdit;
+      if (pending) {
+        store.updateCampaign(campaignId, { data: { pendingEdit: null } });
+        const reply = confirmIntent(text);
+        if (reply === "yes") {
+          const titles = pending.assetIds.map((id) => store.getAsset(id)?.title).filter(Boolean).join(", ");
+          store.updateCampaign(campaignId, { data: { voiceOverrides: [...(campaign.data.voiceOverrides ?? []), `"${pending.instruction}" (for: ${titles}; overrides: ${pending.conflicts.map((c) => c.rule).join("; ")})`] } });
+          await edit(brand, t, pending.assetIds, `${pending.instruction}\n\nThe marketer was warned this goes against the brand and confirmed. Apply it fully and visibly in this asset: rewrite as much as needed so the change is obvious. Only legal rules, forbidden claims, names and facts still limit it.`, { confirmed: true, label: `${pending.instruction} (confirmed against brand voice)` });
+          return;
+        }
+        if (reply === "partial") {
+          await edit(brand, t, pending.assetIds, `${pending.instruction}\n\nApply this only where the brand's rules and the campaign constraints allow. Where they don't, leave that part out and say so plainly in the summary.`, { confirmed: true, label: `${pending.instruction} (only where the brand allows)` });
+          return;
+        }
+        if (reply === "no") {
+          t.reply("OK, I left the assets as they were.");
+          return;
+        }
+        // Anything else: drop the question and treat it as a new message.
       }
       const route = await routeMessage(
         { state: campaign.state, message: text, plan: campaign.data.plan, assets: store.listAssets(campaignId), recent: recentTranscript(campaignId, 8) },
@@ -188,6 +237,8 @@ async function writeAll(brand: Brand, t: Turn) {
   t.setState("review");
 }
 
+const WEB_TYPES = new Set(["landing_page", "blog_post", "email"]);
+
 async function writeItems(brand: Brand, t: Turn, items: PlanItem[]) {
   const data = t.data();
   const memories = memoriesForPrompt(brand.hash);
@@ -212,6 +263,9 @@ async function writeItems(brand: Brand, t: Turn, items: PlanItem[]) {
       const row = rows[i];
       const ctx = { ...t.ctx, assetId: row.id };
       const written = await writeAsset(brand, data, memories, item, ctx, throttle(250, (raw) => t.emit({ type: "draft", assetId: row.id, text: draftText(raw) })));
+      // Web pages and emails start from the design of the marketer's reference, if they sent one.
+      const refStyle = data.referenceStyle && WEB_TYPES.has(item.type) ? mergeStyle(undefined, data.referenceStyle, brandLook(brand)) : undefined;
+      if (refStyle) written.content = { ...written.content, style: refStyle };
       const version = store.addVersion(row.id, { content: written.content, sources: written.sources });
       t.emit({ type: "asset", assetId: row.id });
       let guard = await guardAsset(brand, data, item, written.content, ctx);
@@ -269,8 +323,21 @@ async function autoFix(
   }
 }
 
-async function edit(brand: Brand, t: Turn, assetIds: string[], instruction: string) {
+async function edit(brand: Brand, t: Turn, assetIds: string[], instruction: string, opts: { confirmed?: boolean; label?: string } = {}) {
+  // What the version history and chat show: the marketer's request, not internal instructions.
+  const label = opts.label ?? instruction;
   if (!assetIds.length) return t.reply("Which asset should I change?");
+  // Guard rail: ask before anything that goes against the brand or is unusual for it.
+  if (!opts.confirmed) {
+    t.status("Checking the request against the brand's rules");
+    const assets = assetIds.map((id) => store.getAsset(id)).filter((a): a is NonNullable<typeof a> => !!a);
+    const check = await checkEditRequest(brand, t.data(), instruction, assets.map((a) => ({ title: a.title, type: a.type })), t.ctx);
+    if (check.verdict === "confirm") {
+      store.updateCampaign(t.campaignId, { data: { pendingEdit: { instruction, assetIds, conflicts: check.conflicts } } });
+      t.say("assistant", "confirm", { question: check.question, conflicts: check.conflicts, instruction });
+      return;
+    }
+  }
   const data = t.data();
   const memories = memoriesForPrompt(brand.hash);
   const results = await Promise.all(
@@ -281,7 +348,21 @@ async function edit(brand: Brand, t: Turn, assetIds: string[], instruction: stri
       const ctx = { ...t.ctx, assetId: id };
       t.status(`Editing ${asset.title}`);
       const edited = await editAsset(brand, data, memories, current.content, instruction, ctx);
-      let version = store.addVersion(id, { content: edited.content, sources: current.sources, instruction });
+      // A free-form page is its own HTML: template design settings don't apply to it, so every
+      // chat edit (copy or design) redraws the page with that change and the latest copy.
+      if (current.content.html) {
+        t.status(`Redrawing the free-form design of ${asset.title}`);
+        const { style: _ignored, ...keep } = edited.content;
+        void _ignored;
+        const redraw = await generateFreeform(brand, t.data(), keep as AssetContent, current.content.freeformPrompt ?? "", ctx, { html: current.content.html, change: instruction });
+        edited.content = { ...keep, html: redraw.html, ...(current.content.style ? { style: current.content.style } : {}) } as AssetContent;
+        edited.summary = `${redraw.summary} (Free-form design: the brand's look is not enforced.)`;
+      }
+      // Nothing changed (e.g. the request didn't apply): say so without making an identical version.
+      if (JSON.stringify(edited.content) === JSON.stringify(current.content)) {
+        return { assetId: id, title: asset.title, summary: edited.summary, version: asset.current_version, guard: (current.guard as { status?: string } | null)?.status ?? null };
+      }
+      let version = store.addVersion(id, { content: edited.content, sources: current.sources, instruction: label });
       const item = data.plan?.items.find((i) => i.id === asset.plan_item_id);
       let guard = item ? await guardAsset(brand, data, item, edited.content, ctx) : null;
       if (guard) store.setVersionGuard(id, version, guard);
@@ -294,7 +375,7 @@ async function edit(brand: Brand, t: Turn, assetIds: string[], instruction: stri
       return { assetId: id, title: asset.title, summary: edited.summary, version, guard: guard?.status ?? null };
     }),
   );
-  t.say("assistant", "edit", { instruction, results: results.filter(Boolean) });
+  t.say("assistant", "edit", { instruction: label, results: results.filter(Boolean) });
 }
 
 function undo(t: Turn, assetIds: string[]) {
@@ -388,9 +469,91 @@ function recentTranscript(campaignId: string, n: number): string {
       if (m.kind === "text") return `${m.role}: ${String(c.text)}`;
       if (m.kind === "plan") return `assistant: [plan with ${(c.plan as { items: unknown[] }).items.length} assets]`;
       if (m.kind === "edit") return `assistant: [edited assets: ${(c.results as { title: string; summary: string }[]).map((r) => `${r.title}: ${r.summary}`).join("; ")}]`;
+      if (m.kind === "confirm") return `assistant: [asked to confirm an off-brand edit: ${String(c.question ?? "")}]`;
       if (m.kind === "questions") return `assistant: [asked: ${((c.questions as { question: string }[]) ?? []).map((q) => q.question).join(" | ")}]`;
       return `${m.role}: [${m.kind}]`;
     })
     .join("\n");
 }
 
+/**
+ * Free-form design for one asset (opted into past a warning in the UI), or back to the template
+ * (`reset`). Runs as a normal turn: progress streams to watchers, the result is a new version
+ * that the guard checks as displayed, and the chat records what happened.
+ */
+export async function applyFreeform(
+  campaignId: string,
+  assetId: string,
+  opts: { direction: string; reset: boolean; author?: string },
+  emit: Emit,
+  signal?: AbortSignal,
+): Promise<void> {
+  const brand = requireBrand();
+  const campaign = store.getCampaign(campaignId);
+  const asset = store.getAsset(assetId);
+  const current = asset && store.getVersion(assetId, asset.current_version);
+  if (!campaign || !asset || !current) throw new Error("Asset not found");
+  const runId = newId("run");
+  const ctx: CallContext = { runId, campaignId, assetId, signal, models: resolveModels(campaign.data.models) };
+  const t = new Turn(campaignId, ctx, emit);
+  const instruction = opts.reset ? "Back to the brand template" : `Free-form design: ${opts.direction}`;
+  t.say("user", "text", { text: opts.reset ? `Put ${asset.title} back on the brand template.` : `Free-form design for ${asset.title}: ${opts.direction}`, attachments: [], ...(opts.author ? { author: opts.author } : {}) });
+
+  let content: AssetContent;
+  let summary: string;
+  if (opts.reset) {
+    const { html: _h, freeformPrompt: _p, ...rest } = current.content;
+    void _h;
+    void _p;
+    content = rest as AssetContent;
+    summary = "Back on the brand template; the free-form design was removed (earlier versions keep it).";
+  } else {
+    try {
+      // A site named in the direction ("like stripe.dev") is read as a reference first.
+      const urls = referenceUrls(opts.direction.match(/\b(like|look|style)\b/i) ? opts.direction : `like ${opts.direction}`);
+      let data = campaign.data;
+      if (urls.length) {
+        t.status(`Reading ${urls.join(", ")}`);
+        const { pages } = await readNewLinks(urls, data.references ?? [], ctx);
+        if (pages.length) {
+          store.updateCampaign(campaignId, { data: { references: [...(data.references ?? []), ...pages] } });
+          data = store.getCampaign(campaignId)!.data;
+        }
+      }
+      t.status(`Designing ${asset.title} from scratch`);
+      const res = await generateFreeform(brand, data, current.content, opts.direction, ctx);
+      content = { ...current.content, html: res.html, freeformPrompt: opts.direction };
+      summary = `${res.summary} The brand's look is not enforced on this design; the copy was checked again.`;
+    } catch (err) {
+      // Same as a chat turn: a stop or failure is answered in the chat, not left hanging.
+      t.reply(signal?.aborted ? "Stopped. The asset is unchanged." : `Something went wrong with the free-form design: ${(err as Error).message}. The asset is unchanged.`);
+      t.emit({ type: "done", costUSD: t.cost() });
+      if (signal?.aborted) return;
+      throw err;
+    }
+  }
+  const version = store.addVersion(assetId, { content, sources: current.sources, instruction });
+  t.emit({ type: "asset", assetId });
+  const item = campaign.data.plan?.items.find((i) => i.id === asset.plan_item_id);
+  let guard: GuardReport | null = null;
+  if (item) {
+    t.status("Checking the page against brand and legal rules");
+    guard = await guardAsset(brand, campaign.data, item, content, ctx);
+    store.setVersionGuard(assetId, version, guard);
+    t.emit({ type: "asset", assetId });
+  }
+  t.say("assistant", "edit", { instruction, results: [{ assetId, title: asset.title, summary, version, guard: guard?.status ?? null }] });
+  t.emit({ type: "done", costUSD: t.cost() });
+}
+
+/** Reads a reply to the off-brand question: the buttons' exact texts, or a typed yes / no / partly. */
+function confirmIntent(text: string): "yes" | "no" | "partial" | null {
+  const t = text.trim().toLowerCase().replace(/[.!]+$/, "");
+  if (t === CONFIRM_REPLIES.yes.toLowerCase()) return "yes";
+  if (t === CONFIRM_REPLIES.partial.toLowerCase()) return "partial";
+  if (t === CONFIRM_REPLIES.no.toLowerCase()) return "no";
+  if (/^(only where|partly|partially|where (it's|it is) allowed)/.test(t)) return "partial";
+  if (/^(yes|yeah|yep|yup|sure|ok|okay|go ahead|do it|y|confirm|proceed)\b/.test(t) && t.length < 60) return "yes";
+  if (/^(no|nope|nah|cancel|stop|don'?t|leave it|n)\b/.test(t) && t.length < 60) return "no";
+  return null;
+}

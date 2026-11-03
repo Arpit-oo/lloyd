@@ -16,7 +16,7 @@ export type FactKind = (typeof FACT_KINDS)[number];
 
 export const ExtractedFactSchema = z.object({
   kind: z.enum(FACT_KINDS),
-  subject: z.string().describe("What the fact is about, as a short noun phrase a different document would also use, e.g. 'FedRAMP status', 'name of the posture product', 'LinkedIn post length'."),
+  subject: z.string().describe("What the fact is about, as a short noun phrase a different document would also use, e.g. 'certification status', 'name of the main product', 'LinkedIn post length'."),
   statement: z.string().describe("The fact or rule restated as one plain sentence."),
   quote: z.string().describe("Verbatim supporting text from the document, max ~300 characters."),
   heading: z.string().nullable().describe("The section heading it came from."),

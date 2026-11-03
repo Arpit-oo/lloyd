@@ -3,7 +3,7 @@
 import { Archive, Reply, Star, Trash2 } from "lucide-react";
 import type { z } from "zod";
 import type { EmailSchema } from "@/lib/agent/asset-types";
-import { imageUrl, type BrandVars } from "../brand-theme";
+import { imageUrl, onColor, radius, type BrandVars } from "../brand-theme";
 
 /** Renders an email the way it looks in a mail client: inbox row, header, then a 600px body. */
 export function EmailView({ data, vars }: { data: z.infer<typeof EmailSchema>; vars: BrandVars }) {
@@ -32,7 +32,7 @@ export function EmailView({ data, vars }: { data: z.infer<typeof EmailSchema>; v
           </div>
         </div>
         <div className="mt-3 flex items-center gap-3 text-[13px]">
-          <div className="flex h-9 w-9 items-center justify-center rounded-full text-sm font-semibold text-white" style={{ background: vars.primary }}>
+          <div className="flex h-9 w-9 items-center justify-center rounded-full text-sm font-semibold" style={{ background: vars.primary, color: onColor(vars.primary) }}>
             {data.from_name[0]}
           </div>
           <div>
@@ -65,7 +65,7 @@ export function EmailView({ data, vars }: { data: z.infer<typeof EmailSchema>; v
               if (b.kind === "button")
                 return (
                   <div key={i} className="pt-1">
-                    <span className="inline-block rounded-md px-5 py-3 text-[15px] font-semibold text-white" style={{ background: vars.primary }} title={b.url ?? ""}>
+                    <span className="inline-block px-5 py-3 text-[15px] font-semibold" style={{ background: vars.primary, color: onColor(vars.primary), borderRadius: radius(vars.corners).button }} title={b.url ?? ""}>
                       {b.text}
                     </span>
                   </div>

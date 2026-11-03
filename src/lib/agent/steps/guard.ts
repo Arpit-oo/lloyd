@@ -44,7 +44,7 @@ Judge what the text asserts, not word matches: "we are not X" does not claim X. 
 Supported vs. forbidden, and process vs. rule:
 - A product capability or limit that the brand's own product documents, release notes or this brief state is SUPPORTED. Describing it accurately, in the brand's words, needs no further approval.
 - A review step in the brand's process (e.g. "claims go to Legal before publishing", "developer relations checks how-tos") is a workflow note for the humans, not a reason to block or rewrite copy. Mention it at most as a warning.
-- Missing details the brand documents do not supply (a link target, an address, a sender) are warnings for the human to fill in, never blocks.
+- Missing details the brand documents do not supply (a link target, an address, a sender, a time zone) and missing optional elements (no image or screenshot) are warnings for the human to fill in, never blocks.
 - Craft and completeness (a recommended point left out, section order, a weaker opening than the plan intended) are warnings. Block means the asset must not be published as is.
 - Block only what breaks a rule: banned or wrongly worded claims, facts that contradict a higher-authority source, statements with no support in any brand document or the brief, uncleared customers, expired or unsourced statistics, broken brief constraints, internal numbers in copy.
 
@@ -66,7 +66,7 @@ export async function guardAsset(brand: Brand, data: CampaignData, item: PlanIte
   const issues: GuardIssue[] = [...(LIMITS[content.type]?.(content) ?? [])];
 
   for (const target of data.brief?.internal_targets ?? []) {
-    const numbers = target.match(/\d[\d,.]*/g) ?? [];
+    const numbers = targetNumbers(target);
     for (const n of numbers) if (n.length >= 2 && text.includes(n)) issues.push({ check: "rule", quote: n, problem: "An internal target appears in copy", rule: `Internal target: "${target}"`, source_doc: "brief", severity: "block", fix: "Remove the internal number." });
   }
 
@@ -114,4 +114,23 @@ export function imageIdOf(a: AssetContent): string | null {
     case "landing_page":
       return a.data.hero.image.image_id;
   }
+}
+
+const MONTH = "(?:jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|june?|july?|aug(?:ust)?|sep(?:t(?:ember)?)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)";
+const DATE_RE = new RegExp(
+  [
+    String.raw`\b${MONTH}\.?\s+\d{1,2}(?:st|nd|rd|th)?(?:,?\s+\d{4})?`,
+    String.raw`\b\d{1,2}(?:st|nd|rd|th)?\s+${MONTH}\.?(?:,?\s+\d{4})?`,
+    String.raw`\b\d{4}-\d{2}-\d{2}\b`,
+    String.raw`\b(?:Q[1-4]\s+)?(?:19|20)\d{2}\b`,
+  ].join("|"),
+  "gi",
+);
+
+/**
+ * The numbers in an internal target that must not appear in copy ("60 demo requests by
+ * March 31, 2027" -> ["60"]). Dates and years are the campaign's calendar, not the target.
+ */
+export function targetNumbers(target: string): string[] {
+  return (target.replace(DATE_RE, " ").match(/\d[\d,.]*/g) ?? []).map((n) => n.replace(/[.,]+$/, "")).filter((n) => n.length >= 2);
 }

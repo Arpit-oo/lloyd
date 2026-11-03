@@ -49,7 +49,9 @@ export function sweep(base) {
     for (const n of chain) {
       const s = getComputedStyle(n);
       opacity *= +s.opacity;
-      bg = over(rgba(s.backgroundColor), bg);
+      const layer = rgba(s.backgroundColor);
+      // A faded subtree fades its own backgrounds too.
+      bg = over([layer[0], layer[1], layer[2], layer[3] * opacity], bg);
     }
     const colorCss = isField && !el.value ? getComputedStyle(el, "::placeholder").color : st.color;
     let fg = rgba(colorCss);

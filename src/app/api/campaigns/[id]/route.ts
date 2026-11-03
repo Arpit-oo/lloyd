@@ -1,13 +1,20 @@
-import { isRunning, stopRun } from "@/lib/agent/runs";
+import { heartbeat, viewers } from "@/lib/agent/presence";
+import { runInfo, stopRun } from "@/lib/agent/runs";
 import { deleteCampaign, getCampaign, getVersion, listAssets, listMessages, updateCampaign } from "@/lib/agent/store";
 import { campaignCost, estimatePlan } from "@/lib/costs";
 import { db } from "@/lib/db";
 import { DEFAULT_SETTINGS } from "@/lib/llm/catalog";
 import { json } from "@/lib/http/sse";
 
-/** Everything the campaign screen needs in one request: state, chat, assets, cost, estimate. */
-export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
+/**
+ * Everything the campaign screen needs in one request: state, chat, assets, cost, estimate, and
+ * the live run (who started it, its steps, drafts). `?viewer=<tab id>&name=<name>` doubles as a
+ * presence heartbeat, so the reply also lists who else has this campaign open.
+ */
+export async function GET(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
+  const q = new URL(req.url).searchParams;
+  heartbeat(id, q.get("viewer") ?? "", q.get("name") ?? "");
   const campaign = getCampaign(id);
   if (!campaign) return json({ error: "Not found" }, 404);
   const assets = listAssets(id).map((a) => ({ ...a, current: a.current_version ? getVersion(a.id, a.current_version) : null }));
@@ -18,7 +25,9 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
     assets,
     cost: campaignCost(id),
     turnCost: Object.fromEntries(turns.map((t) => [t.run_id, t.usd])),
-    running: isRunning(id),
+    running: !!runInfo(id),
+    run: runInfo(id),
+    viewers: viewers(id).map((v) => ({ id: v.id, name: v.name })),
     models: campaign.data.models ?? DEFAULT_SETTINGS,
     estimate: campaign.data.plan ? estimatePlan(campaign.data.plan.items.map((i) => i.type)) : null,
   });

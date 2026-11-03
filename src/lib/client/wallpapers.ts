@@ -85,7 +85,7 @@ const darkGlass = (accent: string, tint: string) => ({
   "--c-line-strong": "rgba(255,255,255,0.24)",
   "--c-scrim": `color-mix(in srgb, ${tint} 68%, transparent)`,
   "--c-accent": accent,
-  "--c-muted": "#e0e6e4",
+  "--c-muted": "#c3ccc9",
   "--c-canvas": `color-mix(in srgb, ${tint} 70%, #000 10%)`,
 });
 

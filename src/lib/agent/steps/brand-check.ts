@@ -28,7 +28,9 @@ Supported vs. forbidden, and process vs. rule:
 - A review step in the brand's process (e.g. "claims go to Legal before publishing", "developer relations checks how-tos") is a workflow note for the humans, not a reason to block or rewrite copy. Mention it at most as a warning.
 - Block only what breaks a rule: banned or wrongly worded claims, facts that contradict a higher-authority source, statements with no support in any brand document or the brief, uncleared customers, expired or unsourced statistics, broken brief constraints, internal numbers in copy.
 So: a key message that restates the product documents is "ok"; a claim that needs a reviewer's sign-off under the brand's process is "ok" with that noted in the rule; "needs_change" means the WORDING must change.
-Do not invent rules. If the evidence does not cover an item, verdict "ok" with rule "No rule found in brand documents".`;
+Do not invent rules. If the evidence does not cover an item, verdict "ok" with rule "No rule found in brand documents".
+For an "ok" item, alternative is null or the item as asked: never add execution advice, and never attach capabilities of a different product to the one the brief names.
+A factual claim that only the marketer can know is true (seat counts, scarcity, deadlines, "first", "only", rankings, customer counts) and that no brand document confirms: verdict "needs_change", rule "Unverified factual claim", alternative: keep it only if it is true at publish time, otherwise drop it.`;
 
 export async function checkBrief(brand: Brand, brief: StructuredBrief, ctx: CallContext): Promise<BrandCheckItem[]> {
   const items = [

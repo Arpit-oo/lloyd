@@ -1,5 +1,6 @@
 "use client";
 
+import { CONFIRM_REPLIES } from "@/lib/agent/confirm";
 import { Brain, Check, CheckCircle2, ChevronRight, FileText, Pencil, ShieldAlert, ShieldCheck, Sparkles, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import ReactMarkdown from "react-markdown";
@@ -10,15 +11,20 @@ import type { MessageRow } from "@/lib/client/types";
 import type { Memory } from "@/lib/memory/store";
 
 /** One renderer per agent message kind. Cards that ask for input call `onReply` with chat text. */
-export function MessageCard({ m, onReply, onOpenAsset, live, estimate }: {
+export function MessageCard({ m, me = "", onReply, onOpenAsset, live, estimate }: {
   m: MessageRow;
+  /** This person's display name; messages from anyone else in a shared chat are labelled. */
+  me?: string;
   onReply: (text: string) => void;
-  onOpenAsset: (id: string) => void;
+  onOpenAsset: (id: string, tab?: "changes") => void;
   live: boolean;
   estimate: { usd: number; minutes: number } | null;
 }) {
   const c = m.content as Record<string, unknown>;
-  if (m.role === "user") return <UserMessage text={String(c.text ?? "")} attachments={(c.attachments as { id: string; name: string; size: number }[] | undefined) ?? []} />;
+  if (m.role === "user") {
+    const author = typeof c.author === "string" ? c.author : "";
+    return <UserMessage text={String(c.text ?? "")} author={author && author !== me.trim() ? author : ""} attachments={(c.attachments as { id: string; name: string; size: number }[] | undefined) ?? []} />;
+  }
   switch (m.kind) {
     case "brand_check":
       return <BrandCheckCard items={c.items as BrandCheckItem[]} />;
@@ -30,6 +36,8 @@ export function MessageCard({ m, onReply, onOpenAsset, live, estimate }: {
       return <AssetsCard c={c as { count: number; guard: { pass: number; warn: number; block: number }; failed: string[]; assetIds: string[] }} onOpenAsset={onOpenAsset} />;
     case "edit":
       return <EditCard results={c.results as { assetId: string; title: string; summary: string; version: number; guard: string | null }[]} onOpenAsset={onOpenAsset} />;
+    case "confirm":
+      return <ConfirmCard c={c as { question: string; conflicts: { rule: string; source_doc: string | null; affects: string[] }[] }} live={live} onReply={onReply} />;
     case "memory":
       return <MemoryCard ids={c.proposedIds as string[]} />;
     default:
@@ -37,12 +45,17 @@ export function MessageCard({ m, onReply, onOpenAsset, live, estimate }: {
   }
 }
 
-function UserMessage({ text, attachments }: { text: string; attachments: { id: string; name: string; size: number }[] }) {
+function UserMessage({ text, author, attachments }: { text: string; author: string; attachments: { id: string; name: string; size: number }[] }) {
   const [open, setOpen] = useState(false);
   const isBrief = text.length > 600;
   const firstLine = text.split("\n").find((l) => l.trim())?.replace(/^[#*\s]+/, "").replace(/\*\*/g, "") ?? "";
   return (
     <div className="flex flex-col items-end gap-2">
+      {author && (
+        <span className="flex items-center gap-1.5 text-[12.5px] text-muted">
+          <Avatar name={author} size={18} /> {author}
+        </span>
+      )}
       {attachments.length > 0 && (
         <ul className="flex flex-wrap justify-end gap-2">
           {attachments.map((a) => (
@@ -199,7 +212,7 @@ function PlanCard({ plan, onReply, live, estimate }: { plan: Plan; onReply: (t: 
   const [drop, setDrop] = useState<Set<string>>(new Set());
   const toggle = (id: string) => setDrop((s) => (s.has(id) ? new Set([...s].filter((x) => x !== id)) : new Set([...s, id])));
   return (
-    <Card icon={<Pencil size={17} className="text-accent" />} title={`Proposed plan · ${plan.items.length} assets`}>
+    <Card icon={<Pencil size={17} className="text-accent" />} title={`Proposed plan · ${plan.items.length} asset${plan.items.length === 1 ? "" : "s"}`}>
       <p className="leading-relaxed">{plan.summary}</p>
       <details className="mt-2 text-[13px] text-muted">
         <summary className="cursor-pointer select-none font-medium">Why this mix</summary>
@@ -234,7 +247,7 @@ function PlanCard({ plan, onReply, live, estimate }: { plan: Plan; onReply: (t: 
             </button>
           ) : (
             <button onClick={() => onReply("Looks good. Write it.")} className="flex items-center gap-2 rounded-lg bg-accent px-4 py-2 text-[14px] font-semibold text-on-accent hover:brightness-95">
-              <CheckCircle2 size={16} /> Approve and write {plan.items.length} assets
+              <CheckCircle2 size={16} /> Approve and write {plan.items.length} asset{plan.items.length === 1 ? "" : "s"}
             </button>
           )}
           {estimate && drop.size === 0 && (
@@ -249,7 +262,7 @@ function PlanCard({ plan, onReply, live, estimate }: { plan: Plan; onReply: (t: 
   );
 }
 
-function AssetsCard({ c, onOpenAsset }: { c: { count: number; guard: { pass: number; warn: number; block: number }; failed: string[]; assetIds: string[] }; onOpenAsset: (id: string) => void }) {
+function AssetsCard({ c, onOpenAsset }: { c: { count: number; guard: { pass: number; warn: number; block: number }; failed: string[]; assetIds: string[] }; onOpenAsset: (id: string, tab?: "changes") => void }) {
   return (
     <Card icon={<CheckCircle2 size={17} className="text-ok" />} title={`${c.count} asset${c.count > 1 ? "s" : ""} written`}>
       <div className="flex flex-wrap gap-2 text-[13px]">
@@ -268,7 +281,7 @@ function AssetsCard({ c, onOpenAsset }: { c: { count: number; guard: { pass: num
 
 const CHECK_WORDS: Record<string, string> = { pass: "passes the brand check", warn: "has notes to review", block: "needs a fix" };
 
-function EditCard({ results, onOpenAsset }: { results: { assetId: string; title: string; summary: string; version: number; guard: string | null }[]; onOpenAsset: (id: string) => void }) {
+function EditCard({ results, onOpenAsset }: { results: { assetId: string; title: string; summary: string; version: number; guard: string | null }[]; onOpenAsset: (id: string, tab?: "changes") => void }) {
   return (
     <Card icon={<Pencil size={17} className="text-accent" />} title={`Edited ${results.length} asset${results.length > 1 ? "s" : ""}. Nothing else changed`}>
       <ul className="space-y-2.5">
@@ -277,9 +290,46 @@ function EditCard({ results, onOpenAsset }: { results: { assetId: string; title:
             <button onClick={() => onOpenAsset(r.assetId)} className="text-left font-medium underline-offset-2 hover:underline">{r.title}</button>
             <span className="ml-2 text-[13px] text-muted">version {r.version}{r.guard ? `, ${CHECK_WORDS[r.guard] ?? r.guard}` : ""}</span>
             <div className="text-[13.5px] leading-relaxed">{r.summary}</div>
+            {r.version > 1 && (
+              <button onClick={() => onOpenAsset(r.assetId, "changes")} className="mt-1 text-[13px] font-medium text-accent-ink underline underline-offset-2">
+                View changes
+              </button>
+            )}
           </li>
         ))}
       </ul>
+    </Card>
+  );
+}
+
+/** "This goes against the brand. Do it anyway?" Shown before an edit that conflicts with the rules. */
+function ConfirmCard({ c, live, onReply }: { c: { question: string; conflicts: { rule: string; source_doc: string | null; affects: string[] }[] }; live: boolean; onReply: (text: string) => void }) {
+  return (
+    <Card icon={<ShieldAlert size={17} className="text-warn" />} title="Before I change this: it goes against the brand">
+      <div className="space-y-4">
+        <p className="text-[14.5px] leading-relaxed">{c.question}</p>
+        {c.conflicts.length > 0 && (
+          <ul className="space-y-2">
+            {c.conflicts.map((x, i) => (
+              <li key={i} className="rounded-lg border border-warn/30 bg-warn-soft px-3 py-2 text-[13.5px]">
+                <span className="font-medium">{x.rule}</span>
+                {x.source_doc && <span className="text-muted"> · {x.source_doc}</span>}
+                {x.affects.length > 0 && <div className="mt-0.5 text-[12.5px] text-muted">Affects: {x.affects.join(", ")}</div>}
+              </li>
+            ))}
+          </ul>
+        )}
+        {live ? (
+          <div className="flex flex-wrap gap-2">
+            <button onClick={() => onReply(CONFIRM_REPLIES.yes)} className="rounded-lg bg-ink px-3.5 py-2 text-[13.5px] font-semibold text-on-ink">{CONFIRM_REPLIES.yes}</button>
+            <button onClick={() => onReply(CONFIRM_REPLIES.partial)} className="rounded-lg border border-line bg-surface px-3.5 py-2 text-[13.5px] hover:border-line-strong">{CONFIRM_REPLIES.partial}</button>
+            <button onClick={() => onReply(CONFIRM_REPLIES.no)} className="rounded-lg px-3.5 py-2 text-[13.5px] text-muted hover:bg-ink/5 hover:text-ink">{CONFIRM_REPLIES.no}</button>
+          </div>
+        ) : (
+          <p className="text-[12.5px] text-muted">Answered.</p>
+        )}
+        <p className="text-[12.5px] text-muted">&ldquo;Do it anyway&rdquo; overrides voice and style rules for these assets only. Legal rules and forbidden claims still apply.</p>
+      </div>
     </Card>
   );
 }
@@ -317,5 +367,19 @@ function MemoryCard({ ids }: { ids: string[] }) {
         ))}
       </ul>
     </Card>
+  );
+}
+
+/** A person's initial in a circle. The tint comes from the name, so each person keeps one color. */
+export function Avatar({ name, size = 24 }: { name: string; size?: number }) {
+  const hue = [...name].reduce((h, ch) => (h * 31 + ch.charCodeAt(0)) % 360, 7);
+  return (
+    <span
+      aria-hidden
+      className="inline-flex shrink-0 items-center justify-center rounded-full font-semibold text-[#1a1918]"
+      style={{ width: size, height: size, fontSize: size * 0.48, background: `oklch(0.86 0.08 ${hue})` }}
+    >
+      {(name.trim()[0] ?? "?").toUpperCase()}
+    </span>
   );
 }

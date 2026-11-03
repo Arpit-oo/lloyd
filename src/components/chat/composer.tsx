@@ -21,7 +21,7 @@ export interface Attached {
   note?: string;
 }
 
-const ACCEPT = ".md,.markdown,.txt,.pdf,.docx,.html,.htm,.csv,.json";
+const ACCEPT = ".md,.markdown,.txt,.pdf,.docx,.html,.htm,.csv,.json,.png,.jpg,.jpeg,.webp,.gif";
 
 export function Composer({ draft, setDraft, onSend, onStop, onThemes, busy, disabled, placeholder, large, models, setModels, inputRef, enterToSend = true }: {
   draft: string;
@@ -161,7 +161,7 @@ export function Composer({ draft, setDraft, onSend, onStop, onThemes, busy, disa
               <Square size={13} fill="currentColor" />
             </button>
           ) : (
-            <button onClick={send} disabled={!canSend} aria-label="Send" title="Send (Enter)" className="flex h-8 w-8 max-sm:h-10 max-sm:w-10 items-center justify-center rounded-lg bg-accent text-on-accent transition hover:brightness-95 disabled:bg-ink/15 disabled:text-on-ink">
+            <button onClick={send} disabled={!canSend} aria-label="Send" title="Send (Enter)" className="flex h-8 w-8 max-sm:h-10 max-sm:w-10 items-center justify-center rounded-lg bg-accent text-on-accent transition hover:brightness-95 disabled:bg-ink/15 disabled:text-muted">
               <ArrowUp size={17} />
             </button>
           )}

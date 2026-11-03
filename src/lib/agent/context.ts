@@ -42,10 +42,18 @@ export function campaignBlock(data: CampaignData, memories: MemoryForPrompt[]): 
       parts.push(`Campaign-scoped overrides (apply to THIS campaign only; brand documents stand on everything else):\n${b.overrides.map((o) => `- ${o.subject}: ${o.statement} ("${o.quote}")`).join("\n")}`);
   }
   if (data.brandCheck?.length)
-    parts.push(`Brand check decisions (binding):\n${data.brandCheck.map((c) => `- ${c.requested} -> ${c.verdict.toUpperCase()}: ${c.rule}${c.alternative ? `. Instead: ${c.alternative}` : ""}`).join("\n")}`);
+    parts.push(`Brand check decisions (binding):\n${data.brandCheck.map((c) => `- ${c.requested} -> ${c.verdict.toUpperCase()}: ${c.rule}${c.alternative && c.verdict !== "ok" ? `. Instead: ${c.alternative}` : ""}`).join("\n")}`);
   if (data.answers) parts.push(`Answers from the marketer:\n${data.answers}`);
   if (data.references?.length)
-    parts.push(`Reference material the marketer attached (use where relevant; brand rules still win):\n${data.references.map((r) => `--- ${r.name} ---\n${r.text.slice(0, 12_000)}`).join("\n\n")}`);
+    parts.push(
+      `References the marketer sent. Make the assets resemble them: follow a design reference's layout and feel, and a writing example's structure, tone, length and level of detail. Never copy a reference's claims, statistics or customer names; brand rules and the brand check always win over a reference.\n${data.references
+        .map((r) => `--- ${r.kind === "image" ? "Image" : r.kind === "link" ? "Web page" : "Document"}: ${r.name} ---\n${r.text.slice(0, r.kind === "document" ? 12_000 : 6_000)}`)
+        .join("\n\n")}`,
+    );
+  if (data.voiceOverrides?.length)
+    parts.push(
+      `Exceptions the marketer explicitly confirmed after being warned (they override the brand's voice, tone and style rules and the audience constraints for the assets named; apply them fully and visibly; legal rules, forbidden claims, names and facts still apply, and the brand check must not flag these as problems):\n${data.voiceOverrides.map((o) => `- ${o}`).join("\n")}`,
+    );
   if (data.plan) parts.push(`Campaign plan:\n${data.plan.summary}\n${data.plan.items.map((i, n) => `${n + 1}. [${i.id}] ${ASSET_LABEL[i.type]}: ${i.title} (${i.audience})`).join("\n")}`);
   if (memories.length) parts.push(`What the marketer told us in earlier campaigns (follow unless this brief says otherwise):\n${memories.map((m) => `- ${m.text}`).join("\n")}`);
   return { label: "campaign", cache: true, text: parts.join("\n\n") };

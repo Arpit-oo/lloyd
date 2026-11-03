@@ -10,6 +10,7 @@ import { ThemePicker } from "../themes/theme-picker";
 import { Bee } from "../brand/bee";
 import { Composer } from "./composer";
 import { MessageCard } from "./message-cards";
+import { RunSteps, type LiveRun } from "./run-steps";
 
 const PLACEHOLDER: Record<string, string> = {
   new: "Paste a brief, attach a brief file, or describe the campaign…",
@@ -26,13 +27,16 @@ interface SampleBrief {
 }
 
 /** The conversation: a centered column, plain assistant replies, and the composer. */
-export function Chat({ view, busy, status, onSend, onStop, onOpenAsset, models, setModels, inputRef, themes, prefs }: {
+export function Chat({ view, busy, run, notice, onSend, onStop, onOpenAsset, models, setModels, inputRef, themes, prefs }: {
   view: CampaignView | null;
   busy: boolean;
-  status: string | null;
+  /** The run being worked on (this tab's, or a coworker's in a shared chat). */
+  run: LiveRun | null;
+  /** A one-off problem to show above the message box, e.g. someone else's turn. */
+  notice: string | null;
   onSend: (text: string, attachmentIds?: string[]) => void;
   onStop: () => void;
-  onOpenAsset: (id: string) => void;
+  onOpenAsset: (id: string, tab?: "changes") => void;
   models: ModelSettings;
   setModels: (m: ModelSettings) => void;
   inputRef: React.RefObject<HTMLTextAreaElement | null>;
@@ -54,7 +58,7 @@ export function Chat({ view, busy, status, onSend, onStop, onOpenAsset, models, 
   // Follow new content only if the reader is already at the bottom; never yank them down.
   useEffect(() => {
     if (atBottom) scrollToBottom();
-  }, [messages.length, status, atBottom, scrollToBottom]);
+  }, [messages.length, run?.steps.length, atBottom, scrollToBottom]);
 
   useEffect(() => {
     scrollToBottom(false);
@@ -98,6 +102,7 @@ export function Chat({ view, busy, status, onSend, onStop, onOpenAsset, models, 
   if (!messages.length && !busy) return <Welcome composer={composer(true)} name={prefs.name} showMascot={prefs.showMascot} onPick={(b) => { setDraft(b.text); inputRef.current?.focus(); }} />;
 
   const lastInteractive = [...messages].reverse().find((m) => m.role === "assistant" && (m.kind === "questions" || m.kind === "plan"))?.id;
+  const lastMessage = messages[messages.length - 1];
   const lastUser = [...messages].reverse().find((m) => m.role === "user");
   const stalled = !busy && state === "new" && messages.some((m) => m.role === "assistant");
 
@@ -111,14 +116,14 @@ export function Chat({ view, busy, status, onSend, onStop, onOpenAsset, models, 
         }}
         className="min-h-0 flex-1 overflow-y-auto"
       >
-        <div className="mx-auto w-full max-w-[800px] space-y-6 rounded-3xl bg-[var(--c-scrim)] px-4 pb-10 pt-4 sm:px-8">
+        <div className="mx-auto w-full max-w-[800px] space-y-6 rounded-3xl bg-scrim px-4 pb-10 pt-4 sm:px-8">
           {messages.map((m, i) => {
             const runId = (m.content as { runId?: string }).runId;
             const isLastOfRun = runId && m.role === "assistant" && messages.slice(i + 1).every((n) => (n.content as { runId?: string }).runId !== runId);
             const failed = m.kind === "text" && m.role === "assistant" && String((m.content as { text?: string }).text ?? "").startsWith("Something went wrong");
             return (
               <div key={m.id} className={i >= messages.length - 2 ? "settle" : undefined}>
-                <MessageCard m={m} live={!busy && m.id === lastInteractive && (state === "clarifying" || state === "plan_review")} onReply={(t) => send(t, [])} onOpenAsset={onOpenAsset} estimate={view?.estimate ?? null} />
+                <MessageCard m={m} me={prefs.name} live={!busy && (m.kind === "confirm" ? m.id === lastMessage?.id : m.id === lastInteractive && (state === "clarifying" || state === "plan_review"))} onReply={(t) => send(t, [])} onOpenAsset={onOpenAsset} estimate={view?.estimate ?? null} />
                 <MessageFooter
                   text={m.role === "assistant" && m.kind === "text" ? String((m.content as { text?: string }).text ?? "") : null}
                   cost={isLastOfRun ? turnCost[runId!] : undefined}
@@ -135,7 +140,7 @@ export function Chat({ view, busy, status, onSend, onStop, onOpenAsset, models, 
               </button>
             </div>
           )}
-          {busy && <Thinking text={status ?? "Thinking"} bee={prefs.showMascot} />}
+          {busy && <RunSteps run={run} bee={prefs.showMascot} fallback="Thinking" />}
         </div>
       </div>
       {!atBottom && (
@@ -143,8 +148,11 @@ export function Chat({ view, busy, status, onSend, onStop, onOpenAsset, models, 
           <ArrowDown size={17} />
         </button>
       )}
-      <div data-glass className="shrink-0 bg-[var(--c-scrim)] px-3 pb-4 pt-2 sm:px-6">
+      <div className="shrink-0 bg-scrim px-3 pb-4 pt-2 sm:px-6">
         <div className="mx-auto w-full max-w-[760px]">
+          {notice && (
+            <p role="alert" className="mb-2 rounded-xl border border-warn/30 bg-warn-soft px-3.5 py-2 text-[13px] text-ink">{notice}</p>
+          )}
           {composer(false)}
           <p className="mt-2 text-center text-[12px] text-muted">Every claim is checked against the brand&apos;s rules. Review before publishing.</p>
         </div>
@@ -217,23 +225,6 @@ function Welcome({ composer, onPick, name, showMascot }: { composer: React.React
           I check the brief against the brand&apos;s rules, ask only what I need, and propose a plan. Nothing is written until you approve it.
         </p>
       </div>
-    </div>
-  );
-}
-
-function Thinking({ text, bee }: { text: string; bee: boolean }) {
-  return (
-    <div role="status" aria-live="polite" className="flex items-center gap-2.5 text-sm text-muted">
-      {bee ? (
-        <Bee size={22} mood="fly" />
-      ) : (
-        <span className="flex gap-1" aria-hidden>
-          {[0, 1, 2].map((i) => (
-            <span key={i} className="typing-dot h-1.5 w-1.5 rounded-full bg-accent" style={{ animationDelay: `${i * 0.2}s` }} />
-          ))}
-        </span>
-      )}
-      <span className="font-serif italic">{text}…</span>
     </div>
   );
 }

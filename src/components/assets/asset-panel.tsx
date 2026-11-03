@@ -1,16 +1,17 @@
 "use client";
 
-import { AlertTriangle, ArrowLeft, Check, CheckCircle2, Copy, Download, FileText, Loader2, ShieldAlert, X } from "lucide-react";
+import { AlertTriangle, ArrowLeft, Check, CheckCircle2, Copy, Download, FileText, LayoutTemplate, Loader2, RefreshCw, ShieldAlert, Wand2, X } from "lucide-react";
 import { useEffect, useState } from "react";
-import { ASSET_LABEL, assetToText, type AssetContent } from "@/lib/agent/asset-types";
+import { ASSET_LABEL, assetToText, FREEFORM_TYPES, type AssetContent } from "@/lib/agent/asset-types";
 import { diffWords } from "@/lib/text/diff";
 import type { GuardReport } from "@/lib/agent/steps/guard";
 import type { ResearchFinding } from "@/lib/agent/steps/research";
-import { getJSON, sendJSON, usd } from "@/lib/client/api";
+import { getJSON, sendJSON, tabId, usd } from "@/lib/client/api";
 import type { CallSummary, CampaignView } from "@/lib/client/types";
 import type { DesignTokens } from "@/lib/brand/design-tokens";
 import { CallView } from "../inspector/call-view";
-import { BrandTheme, brandVars, type BrandVars } from "./brand-theme";
+import { applyStyle, BrandTheme, brandVars, type BrandVars } from "./brand-theme";
+import { FreeformDialog } from "./freeform-dialog";
 import { EmailView } from "./renderers/email";
 import { LinkedInPost, XPost } from "./renderers/social";
 import { BlogView, LandingView } from "./renderers/web";
@@ -18,19 +19,43 @@ import { BlogView, LandingView } from "./renderers/web";
 type Asset = CampaignView["assets"][number];
 type Tab = "preview" | "changes" | "checks" | "sources" | "prompt";
 
-export function AssetPanel({ assets, drafts = {}, tokens, selected, onSelect, onChanged, onClose, closeLabel = "Close assets" }: {
+export function AssetPanel({ assets, drafts = {}, tokens, selected, focus, onSelect, onClearFocus, onChanged, onClose, closeLabel = "Close assets" }: {
   assets: Asset[];
   /** Live text of assets still being written, keyed by asset id. */
   drafts?: Record<string, string>;
   tokens: DesignTokens | null | undefined;
   selected: string | null;
+  /** Open this asset on a given tab (e.g. "View changes" in the chat). */
+  focus?: { id: string; tab: "changes"; n: number } | null;
   onSelect: (id: string) => void;
-  onChanged: () => void;
+  onClearFocus?: () => void;
+  onChanged: () => void | Promise<unknown>;
   onClose?: () => void;
   closeLabel?: string;
 }) {
   const vars = brandVars(tokens);
   const asset = assets.find((a) => a.id === selected) ?? assets[0];
+  // Versions already seen, so assets that changed since show an "updated" dot.
+  const [seen, setSeen] = useState<Record<string, number>>(() => Object.fromEntries(assets.map((a) => [a.id, a.current_version])));
+  // Adjust during render (React's pattern for state derived from props): assets that appear later
+  // start as seen, and whatever asset is open is seen at its current version.
+  const unseenNew = assets.filter((a) => !(a.id in seen));
+  if (unseenNew.length || (asset && seen[asset.id] !== asset.current_version)) {
+    setSeen((s) => ({ ...s, ...Object.fromEntries(unseenNew.map((a) => [a.id, a.current_version])), ...(asset ? { [asset.id]: asset.current_version } : {}) }));
+  }
+  const [refreshing, setRefreshing] = useState(false);
+  const [refreshN, setRefreshN] = useState(0);
+  const select = (id: string) => onSelect(id);
+  const refresh = async () => {
+    setRefreshing(true);
+    onClearFocus?.();
+    try {
+      await onChanged();
+      setRefreshN((n) => n + 1);
+    } finally {
+      setRefreshing(false);
+    }
+  };
 
   if (!assets.length)
     return (
@@ -48,6 +73,9 @@ export function AssetPanel({ assets, drafts = {}, tokens, selected, onSelect, on
             {closeLabel === "Back to chat" ? <><ArrowLeft size={17} /> Chat</> : <X size={17} />}
           </button>
         )}
+        <button onClick={refresh} aria-label="Refresh assets" title="Refresh assets" className="mb-1.5 flex shrink-0 items-center rounded-lg p-1.5 text-muted hover:bg-ink/5 hover:text-ink">
+          <RefreshCw size={16} className={refreshing ? "animate-spin" : ""} />
+        </button>
         <div role="tablist" aria-label="Assets" className="flex min-w-0 flex-1 gap-1 overflow-x-auto">
           {assets.map((a, i) => {
             const guard = a.current?.guard as GuardReport | null;
@@ -57,27 +85,42 @@ export function AssetPanel({ assets, drafts = {}, tokens, selected, onSelect, on
                 key={a.id}
                 role="tab"
                 aria-selected={selectedTab}
-                onClick={() => onSelect(a.id)}
+                onClick={() => select(a.id)}
                 className={`flex shrink-0 items-center gap-2 rounded-t-lg border border-b-0 px-3 py-2 text-[13px] ${selectedTab ? "border-line bg-panel font-semibold" : "border-transparent text-muted hover:text-ink"}`}
               >
                 <StatusDot status={a.status} guard={guard?.status} />
                 <span className="tabular text-muted">{i + 1}.</span>
                 <span className="max-w-44 truncate">{a.title}</span>
+                {!selectedTab && seen[a.id] !== undefined && a.current_version > seen[a.id] && (
+                  <span className="rounded-full bg-accent px-1.5 py-px text-[10.5px] font-semibold text-on-accent" title="Changed since you last looked">updated</span>
+                )}
               </button>
             );
           })}
         </div>
       </div>
-      {asset && <AssetDetail key={asset.id} asset={asset} draft={drafts[asset.id]} vars={vars} onChanged={onChanged} />}
+      {asset && (
+        <AssetDetail
+          key={`${asset.id}:${refreshN}:${focus?.id === asset.id ? focus.n : 0}`}
+          asset={asset}
+          draft={drafts[asset.id]}
+          vars={vars}
+          onChanged={onChanged}
+          initialTab={focus?.id === asset.id && asset.current_version > 1 ? focus.tab : "preview"}
+        />
+      )}
     </div>
   );
 }
 
 const TAB_LABEL: Record<Tab, string> = { preview: "Preview", changes: "Changes", checks: "Checks", sources: "Sources", prompt: "Prompt" };
 
-function AssetDetail({ asset, draft, vars, onChanged }: { asset: Asset; draft?: string; vars: BrandVars; onChanged: () => void }) {
-  const [tab, setTab] = useState<Tab>("preview");
+function AssetDetail({ asset, draft, vars, onChanged, initialTab = "preview" }: { asset: Asset; draft?: string; vars: BrandVars; onChanged: () => void | Promise<unknown>; initialTab?: Tab }) {
+  const [tab, setTab] = useState<Tab>(initialTab);
   const [copied, setCopied] = useState(false);
+  const [freeform, setFreeform] = useState(false);
+  const [resetting, setResetting] = useState(false);
+  const [actionError, setActionError] = useState<string | null>(null);
   const [detail, setDetail] = useState<{ versions: { version: number; instruction: string | null; created_at: string }[]; calls: CallSummary[] } | null>(null);
   const current = asset.current;
   const guard = current?.guard as GuardReport | null;
@@ -109,6 +152,41 @@ function AssetDetail({ asset, draft, vars, onChanged }: { asset: Asset; draft?: 
     URL.revokeObjectURL(url);
   };
 
+  const author = () => {
+    try {
+      return String(JSON.parse(localStorage.getItem("lloyd-settings") ?? "{}").name ?? "");
+    } catch {
+      return "";
+    }
+  };
+  const runFreeform = async (direction: string) => {
+    await sendJSON(`/api/assets/${asset.id}/freeform`, "POST", { direction, confirmed: true, author: author(), tab: tabId() });
+    setFreeform(false);
+    onChanged();
+  };
+  const backToTemplate = async () => {
+    setResetting(true);
+    setActionError(null);
+    try {
+      await sendJSON(`/api/assets/${asset.id}/freeform`, "POST", { reset: true, author: author(), tab: tabId() });
+      onChanged();
+    } catch (e) {
+      setActionError((e as Error).message);
+    } finally {
+      setResetting(false);
+    }
+  };
+  const downloadHtml = () => {
+    if (!current?.content.html) return;
+    const url = URL.createObjectURL(new Blob([current.content.html], { type: "text/html" }));
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${asset.title.replace(/[^a-z0-9]+/gi, "-").toLowerCase()}.html`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+  const canFreeform = FREEFORM_TYPES.includes(asset.type);
+
   const tabs = (["preview", "changes", "checks", "sources", "prompt"] as Tab[]).filter((t) => t !== "changes" || asset.current_version > 1);
 
   return (
@@ -129,6 +207,23 @@ function AssetDetail({ asset, draft, vars, onChanged }: { asset: Asset; draft?: 
           </>
         )}
         <div className="ml-auto flex items-center gap-1">
+          {current && canFreeform && (
+            current.content.html ? (
+              <>
+                <button onClick={backToTemplate} disabled={resetting} className="flex items-center gap-1.5 rounded-md px-2 py-1 text-[12px] text-muted hover:bg-ink/5 hover:text-ink disabled:opacity-50" title="Remove the free-form design and use the brand template again">
+                  {resetting ? <Loader2 size={14} className="animate-spin" /> : <LayoutTemplate size={14} />} Back to template
+                </button>
+                <button onClick={downloadHtml} className="flex items-center gap-1.5 rounded-md px-2 py-1 text-[12px] text-muted hover:bg-ink/5 hover:text-ink" title="Download the page as HTML">
+                  <Download size={14} /> .html
+                </button>
+              </>
+            ) : (
+              <button onClick={() => setFreeform(true)} className="flex items-center gap-1.5 rounded-md px-2 py-1 text-[12px] text-muted hover:bg-ink/5 hover:text-ink" title="Let the AI design this page from scratch (not brand-enforced)">
+                <Wand2 size={14} /> Free-form design
+              </button>
+            )
+          )}
+          {freeform && <FreeformDialog title={asset.title} onCancel={() => setFreeform(false)} onConfirm={runFreeform} />}
           {current && (
             <>
               <button onClick={copy} className="flex items-center gap-1.5 rounded-md px-2 py-1 text-[12px] text-muted hover:bg-ink/5 hover:text-ink" title="Copy the text">
@@ -149,6 +244,9 @@ function AssetDetail({ asset, draft, vars, onChanged }: { asset: Asset; draft?: 
         </div>
       </div>
 
+      {actionError && (
+        <p role="alert" className="mx-4 mt-3 rounded-lg border border-bad/30 bg-bad-soft px-3 py-2 text-[13px] text-ink">{actionError}</p>
+      )}
       <div role="tabpanel" className={`min-h-0 flex-1 overflow-y-auto p-4 sm:p-6 ${tab === "preview" ? "bg-canvas" : ""}`}>
         {!current && draft ? (
           <LiveDraft text={draft} label={ASSET_LABEL[asset.type]} />
@@ -157,8 +255,18 @@ function AssetDetail({ asset, draft, vars, onChanged }: { asset: Asset; draft?: 
             {asset.status === "error" ? <><AlertTriangle size={16} /> This asset was not written (stopped or failed). Ask in the chat to write it again.</> : draft ? null : <><Loader2 className="animate-spin" size={16} /> Gathering brand context…</>}
           </div>
         ) : tab === "preview" ? (
-          <BrandTheme vars={vars}>
-            <Preview content={current.content} vars={vars} />
+          <BrandTheme vars={applyStyle(vars, current.content.style)}>
+            <OffBrandBanner content={current.content} />
+            {current.content.html ? (
+              <iframe
+                title={`${asset.title} (free-form design)`}
+                sandbox=""
+                srcDoc={current.content.html}
+                className="mx-auto block h-[78vh] w-full max-w-[1100px] rounded-xl border border-black/15 bg-white"
+              />
+            ) : (
+              <Preview content={current.content} vars={applyStyle(vars, current.content.style)} />
+            )}
           </BrandTheme>
         ) : tab === "changes" ? (
           <Changes assetId={asset.id} version={asset.current_version} current={current.content} />
@@ -214,17 +322,56 @@ function Changes({ assetId, version, current }: { assetId: string; version: numb
   }, [assetId, version]);
   if (!prev) return <div className="text-sm text-muted">Loading…</div>;
   const parts = diffWords(assetToText(prev.content), assetToText(current));
+  const colourChanges = (["primary", "accent", "ground", "ink"] as const).filter((k) => prev.content.style?.[k] !== current.style?.[k]);
   return (
     <div className="mx-auto max-w-3xl space-y-4">
       <div className="text-sm text-muted">
         v{version - 1} → v{version}{instruction ? <>: <span className="text-ink">{instruction}</span></> : null}
       </div>
+      {colourChanges.length > 0 && (
+        <ul className="flex flex-wrap gap-2 text-[13px]">
+          {colourChanges.map((k) => (
+            <li key={k} className="flex items-center gap-2 rounded-lg border border-line bg-surface px-3 py-1.5">
+              <span className="text-muted">{COLOUR_LABEL[k]}</span>
+              <Swatch hex={prev.content.style?.[k]} /> → <Swatch hex={current.style?.[k]} />
+            </li>
+          ))}
+        </ul>
+      )}
       <div className="whitespace-pre-wrap rounded-xl border border-line bg-surface p-6 text-[14.5px] leading-7">
         {parts.map((p, i) =>
           p.kind === "same" ? <span key={i}>{p.text}</span> : p.kind === "added" ? <ins key={i} className="rounded bg-ok-soft px-0.5 text-ok no-underline">{p.text}</ins> : <del key={i} className="rounded bg-bad-soft px-0.5 text-bad">{p.text}</del>,
         )}
       </div>
     </div>
+  );
+}
+
+const COLOUR_LABEL = { primary: "Main colour", accent: "Accent", ground: "Background", ink: "Text" } as const;
+
+function Swatch({ hex }: { hex?: string }) {
+  return (
+    <span className="flex items-center gap-1.5">
+      <span className="h-3.5 w-3.5 rounded-sm ring-1 ring-line-strong" style={{ background: hex ?? "transparent" }} />
+      <span className="font-mono text-[12px]">{hex ?? "brand"}</span>
+    </span>
+  );
+}
+
+/** Warns when an asset no longer follows the brand's look: free-form HTML, or off-brand colours/fonts. */
+function OffBrandBanner({ content }: { content: AssetContent }) {
+  const legacy = (content.style as { offPalette?: string[] } | undefined)?.offPalette;
+  const off = content.style?.offBrand ?? legacy ?? [];
+  if (!content.html && !off.length) return null;
+  return (
+    <p className="mx-auto mb-3 flex max-w-3xl items-start gap-2 rounded-lg border border-warn/30 bg-warn-soft px-3 py-2 text-[13px] text-ink">
+      <AlertTriangle size={15} className="mt-0.5 shrink-0 text-warn" />
+      <span>
+        {content.html
+          ? "Free-form design: the AI wrote this page's own HTML and CSS, so the brand's look is not enforced. The copy is still checked against brand and legal rules. Use \u201cBack to template\u201d to undo."
+          : `Uses colours or fonts that aren't the brand's own (${off.join(", ")}). Ask \u201cgo back to brand design\u201d to undo.`}
+      </span>
+    </p>
   );
 }
 

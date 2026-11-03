@@ -139,7 +139,7 @@ function CampaignRow({ c, active, onOpen, onRename, onDelete }: { c: CampaignLis
         aria-label={`Options for ${c.title}`}
         aria-haspopup="menu"
         aria-expanded={menu}
-        className={`absolute right-1 top-1.5 rounded-md p-1 max-sm:p-2.5 max-sm:top-0.5 text-muted hover:bg-ink/10 hover:text-ink ${menu || active ? "opacity-100" : "opacity-0 focus:opacity-100 group-hover:opacity-100"}`}
+        className={`absolute right-1 top-1.5 rounded-md p-1 max-sm:p-2.5 max-sm:top-0.5 text-muted hover:bg-ink/10 hover:text-ink ${menu || active ? "opacity-100" : "opacity-0 focus:opacity-100 group-hover:opacity-100 max-sm:opacity-100"}`}
       >
         <MoreHorizontal size={16} />
       </button>
