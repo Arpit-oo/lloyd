@@ -47,6 +47,7 @@ export function BrandTheme({ vars, children, className = "" }: { vars: BrandVars
     : null;
   return (
     <div
+      data-preview-root
       className={className}
       style={
         {

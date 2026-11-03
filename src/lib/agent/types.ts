@@ -116,4 +116,8 @@ export interface CampaignData {
   plan?: Plan;
   /** Memory ids injected into this campaign, for the "using n memories" display. */
   memoryIds?: string[];
+  /** Model picker choice for this campaign. */
+  models?: import("@/lib/llm/catalog").ModelSettings;
+  /** Files the marketer attached after the brief, used as reference material. */
+  references?: { name: string; text: string }[];
 }

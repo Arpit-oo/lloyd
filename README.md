@@ -1,4 +1,4 @@
-# Brand-Aware Campaign Agent
+# Lloyd: the brand-aware campaign agent
 
 A local chat app where a marketer and an AI agent plan and write a campaign for a brand. It works from a large, messy brand folder by compiling it once into a **brand layer** (authority order, settled conflicts, names, rules, image rules, a short brand kernel). It then pulls in only the parts each step needs.
 
@@ -22,12 +22,16 @@ Put the brand folder at `./wickhold-candidate-package/candidate` (the default), 
 
 **First run on a brand.** If the brand folder matches a shipped seed (the sample brand does), the index loads instantly from `seed/brands/`. For any other brand folder, the app opens an indexing screen first. Indexing takes a few minutes and costs roughly $1–3 for a 100k-token folder, once. It is cached by a hash of the folder's contents, so changing any file triggers a fresh index.
 
+## The chat
+
+It works like the chat apps you know: a sidebar of campaigns (searchable, grouped by date, rename and delete from the ⋯ menu), a composer that takes **attached files** (PDF, Word, Markdown, text; drag, paste or the paperclip), a **model menu** (Best / Balanced / Fast presets, or pick the writing model), **Stop** while it works, Copy and Retry under replies, and **light / dark / system** themes. Shortcuts: `Ctrl+Shift+O` new campaign, `Ctrl+B` sidebar, `/` focus the message box. A run keeps going if you reload the page, and Stop aborts it for real (in-flight model calls included). On small screens the sidebar becomes a drawer and assets open as a full-screen sheet.
+
 ## Using it
 
-1. **New campaign**, then paste a brief (or drag a `.md` file onto the chat).
+1. **New campaign**, then paste a brief, attach a brief file, or click a sample brief (it loads into the box so you can read it before sending).
 2. The agent checks the brief against the brand's rules and shows a **Brand check** card. It lists what it won't do as written, quotes the rule and its source, and gives the alternative.
 3. It asks questions **only** if the answers change the plan, each with a default. "Use defaults" works.
-4. It proposes a **plan**. Approve it, drop items, or ask for changes in chat. Nothing is written before approval.
+4. It proposes a **plan** with a cost and time estimate. Approve it, remove items, or ask for changes in chat. Nothing is written before approval.
 5. Assets are written in parallel, each with its own context, then checked against brand and legal rules. Blocking problems get one automatic fix.
 6. Edit in chat ("shorten the second LinkedIn post"). Only that asset changes, and it gets a new version (version picker, undo).
 7. Say "we're done" to finish. The agent proposes what to **remember**; you keep or forget each item. New campaigns use what you kept.

@@ -1,117 +1,239 @@
 "use client";
 
-import { ArrowUp, FileUp, Loader2 } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
-import { usd } from "@/lib/client/api";
+import { ArrowDown, FileText, RotateCcw } from "lucide-react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { getJSON, usd } from "@/lib/client/api";
 import type { CampaignView } from "@/lib/client/types";
+import type { ModelSettings } from "@/lib/llm/catalog";
+import type { Appearance } from "@/lib/client/theme";
+import { ThemePicker } from "../themes/theme-picker";
+import { Bee } from "../brand/bee";
+import { Composer } from "./composer";
 import { MessageCard } from "./message-cards";
 
 const PLACEHOLDER: Record<string, string> = {
-  new: "Paste a campaign brief, or drop a .md file here…",
-  clarifying: "Answer the questions, or say “use your defaults”…",
-  plan_review: "Approve the plan, or ask for changes (“drop the X post”, “add a customer email”)…",
-  writing: "Writing assets…",
-  review: "Ask for edits: “shorten the second LinkedIn post”, “make the email subject more direct”…",
+  new: "Paste a brief, attach a brief file, or describe the campaign…",
+  clarifying: "Answer here, or say “use your defaults”",
+  plan_review: "Approve the plan, or ask for changes",
+  writing: "Writing assets… you can stop at any time",
+  review: "Ask for an edit, e.g. “shorten the second LinkedIn post”",
 };
 
-/** Chat column: message history, live agent status, and the composer. */
-export function Chat({ view, busy, status, turnCost, onSend, onOpenAsset }: {
+interface SampleBrief {
+  file: string;
+  title: string;
+  text: string;
+}
+
+/** The conversation: a centered column, plain assistant replies, and the composer. */
+export function Chat({ view, busy, status, onSend, onStop, onOpenAsset, models, setModels, inputRef, themes, prefs }: {
   view: CampaignView | null;
   busy: boolean;
   status: string | null;
-  turnCost: Record<string, number>;
-  onSend: (text: string) => void;
+  onSend: (text: string, attachmentIds?: string[]) => void;
+  onStop: () => void;
   onOpenAsset: (id: string) => void;
+  models: ModelSettings;
+  setModels: (m: ModelSettings) => void;
+  inputRef: React.RefObject<HTMLTextAreaElement | null>;
+  themes: { open: boolean; setOpen: (o: boolean) => void; appearance: Appearance; change: (a: Appearance, origin?: { x: number; y: number }) => void };
+  prefs: { name: string; showMascot: boolean; enterToSend: boolean };
 }) {
-  const [text, setText] = useState("");
-  const [drag, setDrag] = useState(false);
-  const bottom = useRef<HTMLDivElement>(null);
+  const [draft, setDraft] = useState("");
+  const scroller = useRef<HTMLDivElement>(null);
+  const [atBottom, setAtBottom] = useState(true);
   const messages = view?.messages ?? [];
   const state = view?.campaign.state ?? "new";
+  const turnCost = view?.turnCost ?? {};
+
+  const scrollToBottom = useCallback((smooth = true) => {
+    const el = scroller.current;
+    if (el) el.scrollTo({ top: el.scrollHeight, behavior: smooth ? "smooth" : "auto" });
+  }, []);
+
+  // Follow new content only if the reader is already at the bottom; never yank them down.
+  useEffect(() => {
+    if (atBottom) scrollToBottom();
+  }, [messages.length, status, atBottom, scrollToBottom]);
 
   useEffect(() => {
-    bottom.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages.length, status]);
+    scrollToBottom(false);
+  }, [view?.campaign.id, scrollToBottom]);
 
-  const send = () => {
-    if (!text.trim() || busy) return;
-    onSend(text.trim());
-    setText("");
+  const send = (text: string, ids: string[]) => {
+    setAtBottom(true);
+    onSend(text, ids);
   };
 
-  const onDrop = async (e: React.DragEvent) => {
-    e.preventDefault();
-    setDrag(false);
-    const file = e.dataTransfer.files[0];
-    if (file) setText(await file.text());
-  };
+  const composer = (large: boolean) => (
+    <>
+      {themes.open && (
+        <ThemePicker
+          appearance={themes.appearance}
+          onChange={themes.change}
+          onClose={() => {
+            themes.setOpen(false);
+            inputRef.current?.focus();
+          }}
+        />
+      )}
+      <Composer
+      onThemes={() => themes.setOpen(!themes.open)}
+      draft={draft}
+      setDraft={setDraft}
+      onSend={send}
+      onStop={onStop}
+      busy={busy}
+      disabled={state === "writing" && !busy}
+      placeholder={PLACEHOLDER[state]}
+      large={large}
+      models={models}
+      setModels={setModels}
+      inputRef={inputRef}
+      enterToSend={prefs.enterToSend}
+      />
+    </>
+  );
 
-  // The last interactive card is the only one whose buttons are live.
+  if (!messages.length && !busy) return <Welcome composer={composer(true)} name={prefs.name} showMascot={prefs.showMascot} onPick={(b) => { setDraft(b.text); inputRef.current?.focus(); }} />;
+
   const lastInteractive = [...messages].reverse().find((m) => m.role === "assistant" && (m.kind === "questions" || m.kind === "plan"))?.id;
+  const lastUser = [...messages].reverse().find((m) => m.role === "user");
+  const stalled = !busy && state === "new" && messages.some((m) => m.role === "assistant");
 
   return (
-    <div className="flex h-full min-h-0 flex-col" onDragOver={(e) => { e.preventDefault(); setDrag(true); }} onDragLeave={() => setDrag(false)} onDrop={onDrop}>
-      <div className="min-h-0 flex-1 space-y-3 overflow-y-auto px-4 py-5">
-        {!messages.length && <EmptyState />}
-        {messages.map((m) => {
-          const runId = (m.content as { runId?: string }).runId;
-          const showCost = runId && turnCost[runId] !== undefined && m.role === "assistant" && isLastOfRun(messages, m.id, runId);
-          return (
-            <div key={m.id}>
-              <MessageCard m={m} live={!busy && m.id === lastInteractive && (state === "clarifying" || state === "plan_review")} onReply={onSend} onOpenAsset={onOpenAsset} />
-              {showCost && <div className="mt-1 pl-1 text-[10px] text-muted">this turn cost {usd(turnCost[runId!])}</div>}
+    <div className="relative flex min-h-0 flex-1 flex-col">
+      <div
+        ref={scroller}
+        onScroll={(e) => {
+          const el = e.currentTarget;
+          setAtBottom(el.scrollHeight - el.scrollTop - el.clientHeight < 80);
+        }}
+        className="min-h-0 flex-1 overflow-y-auto"
+      >
+        <div className="mx-auto w-full max-w-[800px] space-y-6 rounded-3xl bg-[var(--c-scrim)] px-4 pb-10 pt-4 sm:px-8">
+          {messages.map((m, i) => {
+            const runId = (m.content as { runId?: string }).runId;
+            const isLastOfRun = runId && m.role === "assistant" && messages.slice(i + 1).every((n) => (n.content as { runId?: string }).runId !== runId);
+            const failed = m.kind === "text" && m.role === "assistant" && String((m.content as { text?: string }).text ?? "").startsWith("Something went wrong");
+            return (
+              <div key={m.id} className={i >= messages.length - 2 ? "settle" : undefined}>
+                <MessageCard m={m} live={!busy && m.id === lastInteractive && (state === "clarifying" || state === "plan_review")} onReply={(t) => send(t, [])} onOpenAsset={onOpenAsset} estimate={view?.estimate ?? null} />
+                <MessageFooter
+                  text={m.role === "assistant" && m.kind === "text" ? String((m.content as { text?: string }).text ?? "") : null}
+                  cost={isLastOfRun ? turnCost[runId!] : undefined}
+                  onRetry={failed && lastUser && !busy ? () => send(String((lastUser.content as { text?: string }).text ?? ""), []) : undefined}
+                />
+              </div>
+            );
+          })}
+          {stalled && (
+            <div className="flex flex-wrap items-center gap-3 rounded-xl border border-warn/30 bg-warn-soft px-4 py-3 text-sm text-ink">
+              This run stopped before it finished, so nothing was planned yet.
+              <button onClick={() => send(String((messages.find((m) => m.role === "user")?.content as { text?: string })?.text ?? ""), [])} className="ml-auto flex items-center gap-1.5 rounded-lg bg-ink px-3 py-1.5 text-[13px] font-semibold text-on-ink">
+                <RotateCcw size={14} /> Run the brief again
+              </button>
             </div>
-          );
-        })}
-        {busy && (
-          <div className="flex items-center gap-2 pl-1 text-xs text-muted">
-            <Loader2 size={13} className="animate-spin" /> {status ?? "Thinking"}
-          </div>
-        )}
-        <div ref={bottom} />
-      </div>
-      <div className={`shrink-0 border-t border-line bg-white p-3 ${drag ? "ring-2 ring-accent" : ""}`}>
-        <div className="flex items-end gap-2 rounded-xl bg-panel p-2 ring-1 ring-line focus-within:ring-ink">
-          <textarea
-            value={text}
-            onChange={(e) => setText(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" && !e.shiftKey) {
-                e.preventDefault();
-                send();
-              }
-            }}
-            rows={state === "new" ? 5 : 2}
-            placeholder={PLACEHOLDER[state]}
-            disabled={busy || state === "writing"}
-            className="min-h-0 flex-1 resize-none bg-transparent px-2 py-1 text-sm outline-none placeholder:text-muted"
-          />
-          <button onClick={send} disabled={busy || !text.trim()} className="rounded-lg bg-ink p-2 text-white disabled:opacity-30" aria-label="Send">
-            <ArrowUp size={16} />
-          </button>
+          )}
+          {busy && <Thinking text={status ?? "Thinking"} bee={prefs.showMascot} />}
         </div>
-        {state === "new" && (
-          <div className="mt-2 flex items-center gap-1.5 px-1 text-[11px] text-muted">
-            <FileUp size={12} /> Drag a brief file onto the chat to load it
-          </div>
-        )}
+      </div>
+      {!atBottom && (
+        <button onClick={() => { setAtBottom(true); scrollToBottom(); }} aria-label="Jump to latest" className="shadow-float absolute bottom-36 left-1/2 flex h-9 w-9 -translate-x-1/2 items-center justify-center rounded-full border border-line bg-surface text-muted hover:text-ink">
+          <ArrowDown size={17} />
+        </button>
+      )}
+      <div data-glass className="shrink-0 bg-[var(--c-scrim)] px-3 pb-4 pt-2 sm:px-6">
+        <div className="mx-auto w-full max-w-[760px]">
+          {composer(false)}
+          <p className="mt-2 text-center text-[12px] text-muted">Every claim is checked against the brand&apos;s rules. Review before publishing.</p>
+        </div>
       </div>
     </div>
   );
 }
 
-function isLastOfRun(messages: CampaignView["messages"], id: string, runId: string) {
-  const ofRun = messages.filter((m) => (m.content as { runId?: string }).runId === runId);
-  return ofRun[ofRun.length - 1]?.id === id;
+/** Under each agent turn: what it cost, plus copy / retry where it makes sense. */
+function MessageFooter({ text, cost, onRetry }: { text: string | null; cost?: number; onRetry?: () => void }) {
+  const [copied, setCopied] = useState(false);
+  if (!text && cost === undefined && !onRetry) return null;
+  return (
+    <div className="mt-1.5 flex items-center gap-1 text-[12px] text-muted">
+      {text && (
+        <button
+          onClick={async () => {
+            await navigator.clipboard.writeText(text);
+            setCopied(true);
+            setTimeout(() => setCopied(false), 1500);
+          }}
+          className="rounded-md px-1.5 py-0.5 hover:bg-ink/5 hover:text-ink"
+        >
+          {copied ? "Copied" : "Copy"}
+        </button>
+      )}
+      {onRetry && (
+        <button onClick={onRetry} className="flex items-center gap-1 rounded-md px-1.5 py-0.5 hover:bg-ink/5 hover:text-ink">
+          <RotateCcw size={12} /> Retry
+        </button>
+      )}
+      {cost !== undefined && <span className="tabular px-1.5">{usd(cost)} for this reply</span>}
+    </div>
+  );
 }
 
-function EmptyState() {
+/** Time-of-day greeting, like a person would say it. */
+function greeting(name: string) {
+  const h = new Date().getHours();
+  const part = h < 5 ? "Working late" : h < 12 ? "Good morning" : h < 18 ? "Good afternoon" : "Good evening";
+  return name.trim() ? `${part}, ${name.trim()}` : part;
+}
+
+function Welcome({ composer, onPick, name, showMascot }: { composer: React.ReactNode; onPick: (b: SampleBrief) => void; name: string; showMascot: boolean }) {
+  const [briefs, setBriefs] = useState<SampleBrief[]>([]);
+  useEffect(() => {
+    getJSON<SampleBrief[]>("/api/briefs").then(setBriefs).catch(() => setBriefs([]));
+  }, []);
   return (
-    <div className="mx-auto mt-10 max-w-sm text-center text-sm text-muted">
-      <div className="text-base font-semibold text-ink">Start with a brief</div>
-      <p className="mt-2 leading-relaxed">
-        I&apos;ll check it against the brand&apos;s rules, ask only what I need, and propose a plan of social posts, emails, blogs and landing pages. Nothing gets written until you approve the plan.
-      </p>
+    <div className="flex flex-1 flex-col items-center justify-center overflow-y-auto px-4 pb-16 sm:px-6">
+      {showMascot && <Bee size={64} mood="hover" className="mb-4" />}
+      <p className="mb-1 text-center text-[15px] text-muted">{greeting(name)}</p>
+      <h1 className="mb-7 text-balance text-center font-serif text-[30px] leading-tight text-ink sm:text-[36px]">What are we launching?</h1>
+      <div className="w-full max-w-[700px]">
+        {composer}
+        {briefs.length > 0 && (
+          <div className="mt-4">
+            <div className="mb-2 text-center text-[12px] text-muted">Or start from a sample brief (loads it into the box so you can read it first)</div>
+            <div className="flex flex-wrap justify-center gap-2">
+              {briefs.map((b) => (
+                <button key={b.file} onClick={() => onPick(b)} className="flex max-w-[320px] items-center gap-1.5 rounded-full border border-line bg-surface px-3 py-1.5 text-[13px] text-ink/85 hover:border-line-strong hover:text-ink">
+                  <FileText size={14} className="shrink-0 text-muted" />
+                  <span className="truncate">{b.title}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+        <p className="mx-auto mt-7 max-w-md text-balance text-center text-[13px] leading-relaxed text-muted">
+          I check the brief against the brand&apos;s rules, ask only what I need, and propose a plan. Nothing is written until you approve it.
+        </p>
+      </div>
+    </div>
+  );
+}
+
+function Thinking({ text, bee }: { text: string; bee: boolean }) {
+  return (
+    <div role="status" aria-live="polite" className="flex items-center gap-2.5 text-sm text-muted">
+      {bee ? (
+        <Bee size={22} mood="fly" />
+      ) : (
+        <span className="flex gap-1" aria-hidden>
+          {[0, 1, 2].map((i) => (
+            <span key={i} className="typing-dot h-1.5 w-1.5 rounded-full bg-accent" style={{ animationDelay: `${i * 0.2}s` }} />
+          ))}
+        </span>
+      )}
+      <span className="font-serif italic">{text}…</span>
     </div>
   );
 }

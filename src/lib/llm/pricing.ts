@@ -37,6 +37,12 @@ export interface TokenUsage {
   reasoningTokens: number;
 }
 
+/** List price per 1M tokens (input / cached input / output), or null for an unknown model. */
+export function priceOf(model: string): { input: number; cachedInput: number; output: number } | null {
+  const p = lookup(model);
+  return p ? { input: p.input, cachedInput: p.cachedInput, output: p.output } : null;
+}
+
 export function hasPrice(model: string): boolean {
   return Boolean(lookup(model));
 }

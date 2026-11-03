@@ -1,8 +1,10 @@
 import { requireBrand, type Brand } from "@/lib/brand";
 import { db, newId } from "@/lib/db";
+import { resolveModels, type ModelSettings } from "@/lib/llm/catalog";
 import { llm, type CallContext } from "@/lib/llm/client";
 import { proposeMemories } from "@/lib/memory/extract";
 import { markUsed, memoriesForPrompt } from "@/lib/memory/store";
+import { getAttachments, linkAttachments, renderAttachments } from "./attachments";
 import * as store from "./store";
 import { checkBrief } from "./steps/brand-check";
 import { editAsset } from "./steps/editor";
@@ -14,6 +16,7 @@ import { routeMessage } from "./steps/router";
 import { writeAsset, writerPrefix } from "./steps/writer";
 import { ASSET_SCHEMAS, type AssetContent } from "./asset-types";
 import type { CampaignData, PlanItem } from "./types";
+import { draftText } from "@/lib/text/partial-json";
 
 /**
  * The campaign agent. One entry point per user message; it runs the step the current state
@@ -25,25 +28,45 @@ export type AgentEvent =
   | { type: "status"; text: string }
   | { type: "message"; message: store.MessageRow }
   | { type: "asset"; assetId: string }
+  /** Live text of an asset while it is being written (readable copy, not JSON). */
+  | { type: "draft"; assetId: string; text: string }
   | { type: "state"; state: string }
   | { type: "done"; costUSD: number };
 
 type Emit = (e: AgentEvent) => void;
 
-export async function handleMessage(campaignId: string, text: string, emit: Emit): Promise<void> {
+export interface MessageOptions {
+  /** Aborted when the user presses Stop. */
+  signal?: AbortSignal;
+  /** Files attached to this message (already uploaded and text-extracted). */
+  attachmentIds?: string[];
+  /** Model picker choice; saved on the campaign and used from this turn on. */
+  models?: ModelSettings;
+}
+
+export async function handleMessage(campaignId: string, text: string, emit: Emit, opts: MessageOptions = {}): Promise<void> {
   const brand = requireBrand();
   const campaign = store.getCampaign(campaignId);
   if (!campaign) throw new Error(`Campaign ${campaignId} not found`);
+  if (opts.models) store.updateCampaign(campaignId, { data: { models: opts.models } });
   const runId = newId("run");
-  const ctx: CallContext = { runId, campaignId };
+  const ctx: CallContext = { runId, campaignId, signal: opts.signal, models: resolveModels(opts.models ?? campaign.data.models) };
   const t = new Turn(campaignId, ctx, emit);
 
-  t.say("user", "text", { text });
+  const files = getAttachments(opts.attachmentIds ?? []);
+  if (files.length) linkAttachments(files.map((f) => f.id), campaignId);
+  t.say("user", "text", { text, attachments: files.map((f) => ({ id: f.id, name: f.name, size: f.size })) });
 
   try {
     if (campaign.state === "new") {
-      await startFromBrief(brand, t, text);
+      // An attached file can be the brief, or add to a typed one.
+      const brief = [text, renderAttachments(files)].filter((s) => s.trim()).join("\n\n");
+      await startFromBrief(brand, t, brief);
     } else {
+      if (files.length) {
+        const refs = [...(campaign.data.references ?? []), ...files.map((f) => ({ name: f.name, text: f.text }))];
+        store.updateCampaign(campaignId, { data: { references: refs } });
+      }
       const route = await routeMessage(
         { state: campaign.state, message: text, plan: campaign.data.plan, assets: store.listAssets(campaignId), recent: recentTranscript(campaignId, 8) },
         ctx,
@@ -78,11 +101,25 @@ export async function handleMessage(campaignId: string, text: string, emit: Emit
         }
     }
   } catch (err) {
-    t.reply(`Something went wrong: ${(err as Error).message}`);
+    if (opts.signal?.aborted) {
+      // A deliberate stop is not an error: say what was kept and leave the campaign usable.
+      settleAfterStop(campaignId);
+      t.reply("Stopped. Anything already written is kept; send a message to continue.");
+      return;
+    }
+    t.reply(`Something went wrong: ${(err as Error).message}. Your work so far is saved; try again, or rephrase.`);
     throw err;
   } finally {
     emit({ type: "done", costUSD: t.cost() });
   }
+}
+
+/** After a stop mid-writing, unfinished assets are marked failed and the campaign returns to review. */
+function settleAfterStop(campaignId: string) {
+  const assets = store.listAssets(campaignId);
+  assets.filter((a) => a.status === "writing").forEach((a) => store.setAssetStatus(a.id, a.current_version ? "ready" : "error"));
+  const c = store.getCampaign(campaignId)!;
+  if (c.state === "writing") store.updateCampaign(campaignId, { state: assets.length ? "review" : "plan_review" });
 }
 
 // ---------- flows ----------
@@ -174,7 +211,7 @@ async function writeItems(brand: Brand, t: Turn, items: PlanItem[]) {
     items.map(async (item, i) => {
       const row = rows[i];
       const ctx = { ...t.ctx, assetId: row.id };
-      const written = await writeAsset(brand, data, memories, item, ctx);
+      const written = await writeAsset(brand, data, memories, item, ctx, throttle(250, (raw) => t.emit({ type: "draft", assetId: row.id, text: draftText(raw) })));
       const version = store.addVersion(row.id, { content: written.content, sources: written.sources });
       t.emit({ type: "asset", assetId: row.id });
       let guard = await guardAsset(brand, data, item, written.content, ctx);
@@ -306,6 +343,27 @@ class Turn {
   cost(): number {
     return (db().prepare("SELECT COALESCE(SUM(cost_usd),0) c FROM llm_calls WHERE run_id = ?").get(this.ctx.runId) as { c: number }).c;
   }
+}
+
+/** Calls `fn` at most every `ms`, always delivering the latest value (so the last frame is not lost). */
+function throttle<T>(ms: number, fn: (v: T) => void): (v: T) => void {
+  let last = 0;
+  let pending: T | undefined;
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  return (v: T) => {
+    pending = v;
+    const wait = ms - (Date.now() - last);
+    if (wait <= 0) {
+      last = Date.now();
+      fn(v);
+    } else if (!timer) {
+      timer = setTimeout(() => {
+        timer = undefined;
+        last = Date.now();
+        fn(pending as T);
+      }, wait);
+    }
+  };
 }
 
 function defaultsText(data: CampaignData): string {

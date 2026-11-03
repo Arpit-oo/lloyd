@@ -22,9 +22,9 @@ export function InspectorPanel({ view, onClose }: { view: CampaignView; onClose:
 
   return (
     <Modal title="Inspector" subtitle={`${view.campaign.title}: ${calls.length} model calls · ${usd(cost.totalUSD)} total · ${Math.round(cost.cacheHitRate * 100)}% of input tokens read from cache`} onClose={onClose}>
-      <div className="mb-4 flex gap-1 rounded-lg bg-white p-1 ring-1 ring-line">
+      <div className="mb-4 flex gap-1 rounded-lg bg-surface p-1 ring-1 ring-line">
         {(["calls", "costs"] as const).map((t) => (
-          <button key={t} onClick={() => setTab(t)} className={`flex-1 rounded-md px-3 py-2 text-sm capitalize ${tab === t ? "bg-ink font-semibold text-white" : "text-muted"}`}>
+          <button key={t} onClick={() => setTab(t)} className={`flex-1 rounded-md px-3 py-2 text-sm capitalize ${tab === t ? "bg-ink font-semibold text-on-ink" : "text-muted"}`}>
             {t === "calls" ? "Prompts sent" : "Cost by step"}
           </button>
         ))}
@@ -34,12 +34,12 @@ export function InspectorPanel({ view, onClose }: { view: CampaignView; onClose:
           <ul className="max-h-[66vh] space-y-1 overflow-y-auto">
             {calls.map((c) => (
               <li key={c.id}>
-                <button onClick={() => setSelected(c.id)} className={`w-full rounded-lg px-3 py-2 text-left text-xs ring-1 ${selected === c.id ? "bg-ink text-white ring-ink" : "bg-white ring-line hover:ring-ink"}`}>
+                <button onClick={() => setSelected(c.id)} className={`w-full rounded-lg px-3 py-2 text-left text-xs ring-1 ${selected === c.id ? "bg-ink text-on-ink ring-ink" : "bg-surface ring-line hover:ring-ink"}`}>
                   <div className="flex justify-between gap-2">
                     <span className="truncate font-semibold">{c.step}</span>
                     <span>{usd(c.cost_usd)}</span>
                   </div>
-                  <div className={selected === c.id ? "text-white/70" : "text-muted"}>
+                  <div className={selected === c.id ? "text-on-ink/75" : "text-muted"}>
                     {c.model} · {c.input_tokens.toLocaleString()} in ({c.input_tokens ? Math.round((c.cached_tokens / c.input_tokens) * 100) : 0}% cached) · {c.output_tokens.toLocaleString()} out
                   </div>
                 </button>
@@ -57,13 +57,13 @@ export function InspectorPanel({ view, onClose }: { view: CampaignView; onClose:
               ["Tokens in / out", `${cost.inputTokens.toLocaleString()} / ${cost.outputTokens.toLocaleString()}`],
               ["Cache hit rate", `${Math.round(cost.cacheHitRate * 100)}%`],
             ].map(([k, v]) => (
-              <div key={k} className="rounded-xl bg-white p-4 ring-1 ring-line">
+              <div key={k} className="rounded-xl bg-surface p-4 ring-1 ring-line">
                 <div className="text-xs text-muted">{k}</div>
                 <div className="mt-1 text-xl font-bold">{v}</div>
               </div>
             ))}
           </div>
-          <table className="w-full overflow-hidden rounded-xl bg-white text-sm ring-1 ring-line">
+          <table className="w-full overflow-hidden rounded-xl bg-surface text-sm ring-1 ring-line">
             <thead className="bg-panel text-left text-xs text-muted">
               <tr>{["Step", "Calls", "Input", "Cached", "Cache writes", "Output", "Cost"].map((h) => <th key={h} className="px-4 py-2">{h}</th>)}</tr>
             </thead>

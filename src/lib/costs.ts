@@ -50,3 +50,24 @@ export function campaignCost(campaignId: string): CampaignCost {
     edits: edits.n,
   };
 }
+
+/**
+ * Rough cost of writing a plan, from what assets of each type actually cost on this machine
+ * (write + claim check + any fix), with a conservative fallback before there is history.
+ */
+const FALLBACK_PER_ASSET: Record<string, number> = { linkedin_post: 0.035, x_post: 0.03, email: 0.04, blog_post: 0.07, landing_page: 0.07 };
+
+export function estimatePlan(types: string[]): { usd: number; minutes: number } {
+  const rows = db()
+    .prepare(
+      `SELECT a.type, AVG(t.usd) avg FROM assets a
+       JOIN (SELECT asset_id, SUM(cost_usd) usd FROM llm_calls WHERE asset_id IS NOT NULL AND (step LIKE 'write:%' OR step LIKE 'guard:%' OR step LIKE 'edit:%') GROUP BY asset_id) t
+       ON t.asset_id = a.id GROUP BY a.type`,
+    )
+    .all() as { type: string; avg: number }[];
+  const avg = new Map(rows.map((r) => [r.type, r.avg]));
+  const usd = types.reduce((sum, t) => sum + (avg.get(t) ?? FALLBACK_PER_ASSET[t] ?? 0.05), 0);
+  // Four assets are written at a time, about 40 seconds each including the check.
+  const minutes = Math.max(1, Math.round(((Math.ceil(types.length / 4) * 40 + 20) / 60) * 2) / 2);
+  return { usd, minutes };
+}

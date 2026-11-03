@@ -6,6 +6,7 @@ import type { Governance } from "@/lib/brand/governance";
 import type { ImageRules, Vision } from "@/lib/brand/images";
 import type { IngestSummary } from "@/lib/brand/ingest";
 import type { CampaignCost } from "@/lib/costs";
+import type { ModelSettings } from "@/lib/llm/catalog";
 
 /** Response shapes of the API routes, shared by UI components. */
 export interface CampaignView {
@@ -13,6 +14,17 @@ export interface CampaignView {
   messages: MessageRow[];
   assets: (AssetRow & { current: AssetVersionRow | null })[];
   cost: CampaignCost;
+  turnCost: Record<string, number>;
+  /** True while the agent is working on this campaign (also after a page reload). */
+  running: boolean;
+  models: ModelSettings;
+  estimate: { usd: number; minutes: number } | null;
+}
+
+export interface ModelCatalog {
+  presets: { id: ModelSettings["preset"]; label: string; description: string; writer?: string }[];
+  writers: { id: string; price: { input: number; cachedInput: number; output: number } | null }[];
+  defaults: ModelSettings;
 }
 
 export interface CampaignListItem {

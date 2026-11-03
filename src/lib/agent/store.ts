@@ -68,6 +68,10 @@ export function updateCampaign(id: string, patch: { state?: CampaignState; title
     .run(patch.state ?? current.state, patch.title ?? current.title, JSON.stringify(data), id);
 }
 
+export function deleteCampaign(id: string) {
+  db().prepare("DELETE FROM campaigns WHERE id = ?").run(id);
+}
+
 export function addMessage(campaignId: string, role: MessageRow["role"], kind: string, content: unknown): MessageRow {
   const id = newId("msg");
   db().prepare("INSERT INTO messages (id, campaign_id, role, kind, content_json) VALUES (?,?,?,?,?)").run(id, campaignId, role, kind, JSON.stringify(content));

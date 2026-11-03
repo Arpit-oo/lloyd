@@ -24,12 +24,15 @@ export interface ScannedImage {
 export interface BrandScan {
   hash: string;
   docs: ScannedDoc[];
+  /** PDF/DOCX files: hashed now, text extracted at ingest (see loaders.ts). */
+  binaryDocs: { id: string; abs: string; hash: string }[];
   images: ScannedImage[];
   imageMetadata: Record<string, unknown>[];
   skipped: string[];
 }
 
 const DOC_EXT = new Set([".md", ".markdown", ".txt", ".html", ".htm"]);
+const BINARY_DOC_EXT = new Set([".pdf", ".docx"]);
 const IMG_EXT = new Set([".jpg", ".jpeg", ".png", ".webp", ".gif"]);
 const IGNORED_DIRS = new Set(["briefs", "node_modules", ".git"]);
 
@@ -37,6 +40,7 @@ export function scanBrand(brandDir: string): BrandScan {
   if (!fs.existsSync(brandDir)) throw new Error(`Brand folder not found: ${brandDir}. Set BRAND_DIR in .env.`);
   const files = walk(brandDir);
   const docs: ScannedDoc[] = [];
+  const binaryDocs: BrandScan["binaryDocs"] = [];
   const images: ScannedImage[] = [];
   const imageMetadata: Record<string, unknown>[] = [];
   const skipped: string[] = [];
@@ -53,6 +57,8 @@ export function scanBrand(brandDir: string): BrandScan {
       const raw = buf.toString("utf8");
       const text = ext.startsWith(".htm") ? htmlToText(raw) : raw;
       docs.push({ id: rel, title: firstHeading(text) ?? path.basename(rel, ext), text, hash });
+    } else if (BINARY_DOC_EXT.has(ext)) {
+      binaryDocs.push({ id: rel, abs, hash });
     } else if (IMG_EXT.has(ext)) {
       images.push({ id: path.basename(rel, ext), filename: path.basename(rel), relPath: rel, hash });
     } else if (ext === ".json") {
@@ -65,7 +71,7 @@ export function scanBrand(brandDir: string): BrandScan {
     }
   }
 
-  return { hash: hasher.digest("hex").slice(0, 12), docs, images, imageMetadata, skipped };
+  return { hash: hasher.digest("hex").slice(0, 12), docs, binaryDocs, images, imageMetadata, skipped };
 }
 
 function walk(dir: string): string[] {

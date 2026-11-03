@@ -89,4 +89,16 @@ export const MIGRATIONS: string[] = [
     last_used_at       TEXT
   );
   `,
+
+  // v3: files the marketer attaches in chat (text extracted on upload).
+  `
+  CREATE TABLE attachments (
+    id          TEXT PRIMARY KEY,
+    campaign_id TEXT,
+    name        TEXT NOT NULL,
+    size        INTEGER NOT NULL,
+    text        TEXT NOT NULL,
+    created_at  TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+  );
+  `,
 ];

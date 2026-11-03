@@ -33,7 +33,14 @@ export interface CallContext {
   runId?: string;
   campaignId?: string;
   assetId?: string;
+  /** Per-campaign model choices (from the model picker); fall back to the tier defaults. */
+  models?: Partial<Record<Tier, string>>;
+  /** Aborts in-flight model calls when the user presses Stop. */
+  signal?: AbortSignal;
 }
+
+/** The model a call will use: the campaign's choice for that tier, else the default. */
+const resolveModel = (tier: Tier, ctx?: CallContext) => ctx?.models?.[tier] || modelFor(tier);
 
 export type Effort = "none" | "low" | "medium" | "high";
 
@@ -50,6 +57,8 @@ interface BaseRequest {
   /** Groups requests that share a prefix, for cache routing and accounting. */
   cacheKey?: string;
   ctx?: CallContext;
+  /** Streams the output: called with the text generated so far (raw JSON for structured calls). */
+  onText?: (soFar: string) => void;
 }
 
 export interface LLMResult<T> {
@@ -130,7 +139,7 @@ function buildParams(req: BaseRequest, model: string, extra: Partial<ResponseCre
 async function json<S extends z.ZodType>(
   req: BaseRequest & { schema: S; schemaName: string },
 ): Promise<LLMResult<z.infer<S>>> {
-  const model = modelFor(req.tier);
+  const model = resolveModel(req.tier, req.ctx);
   const format = zodTextFormat(req.schema, req.schemaName);
   const params = buildParams(req, model, { text: { format } });
 
@@ -150,7 +159,7 @@ async function json<S extends z.ZodType>(
 
 /** Free-text call. */
 async function text(req: BaseRequest): Promise<LLMResult<string>> {
-  const model = modelFor(req.tier);
+  const model = resolveModel(req.tier, req.ctx);
   return execute(req, model, buildParams(req, model), (t) => t);
 }
 
@@ -162,7 +171,7 @@ async function text(req: BaseRequest): Promise<LLMResult<string>> {
 async function prewarm(
   req: Omit<BaseRequest, "input"> & { input?: Block[] | string; schema?: z.ZodType; schemaName?: string },
 ): Promise<void> {
-  const model = modelFor(req.tier);
+  const model = resolveModel(req.tier, req.ctx);
   if (!capsFor(model).explicitCache) return;
   // The output schema is part of the cached prefix, so a prewarm must use the same schema
   // as the calls it warms up for, or they will not read from it.
@@ -196,7 +205,18 @@ async function execute<T>(
   let usage: TokenUsage = { inputTokens: 0, cachedTokens: 0, cacheWriteTokens: 0, outputTokens: 0, reasoningTokens: 0 };
 
   try {
-    const res = await semaphore().run(() => client().responses.create(params));
+    req.ctx?.signal?.throwIfAborted();
+    const res = await semaphore().run(async () => {
+      if (!req.onText) return client().responses.create(params, { signal: req.ctx?.signal });
+      // Streaming: same request, output delivered as it is generated; usage comes with the final response.
+      const stream = client().responses.stream({ ...params, stream: true }, { signal: req.ctx?.signal });
+      let soFar = "";
+      stream.on("response.output_text.delta", (e) => {
+        soFar += e.delta;
+        req.onText!(soFar);
+      });
+      return stream.finalResponse();
+    });
     responseText = res.output_text ?? "";
     usage = readUsage(res.usage);
     if (res.status === "incomplete") {

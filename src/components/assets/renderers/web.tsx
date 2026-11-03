@@ -104,21 +104,19 @@ export function LandingView({ data, vars }: { data: z.infer<typeof LandingSchema
       <div style={{ background: vars.ground, color: vars.ink }}>
         <SiteNav vars={vars} cta={data.hero.primary_cta} />
         {/* hero */}
-        <section className="grid items-center gap-10 px-10 pb-16 pt-10 md:grid-cols-[1.1fr_1fr]">
+        <section className={`grid items-center gap-10 px-10 pb-16 pt-10 ${hero ? "md:grid-cols-[1.1fr_1fr]" : ""}`}>
           <div>
             {data.hero.eyebrow && <div className="mb-4 text-sm font-semibold uppercase tracking-wider" style={{ color: vars.primary }}>{data.hero.eyebrow}</div>}
-            <h1 className="text-[48px] font-bold leading-[1.04]" style={{ fontFamily: "var(--brand-display)" }}>{data.hero.headline}</h1>
+            <h1 className={`font-bold leading-[1.04] ${hero ? "text-[clamp(2rem,4vw,2.75rem)]" : "max-w-[18ch] text-[clamp(2.25rem,6vw,3.5rem)]"}`} style={{ fontFamily: "var(--brand-display)" }}>{data.hero.headline}</h1>
             <p className="mt-5 max-w-[34rem] text-lg leading-relaxed opacity-80">{data.hero.subhead}</p>
             <div className="mt-8 flex flex-wrap items-center gap-5">
               <span className="rounded-md px-6 py-3.5 font-semibold text-white" style={{ background: vars.primary }}>{data.hero.primary_cta}</span>
               {data.hero.secondary_cta && <span className="font-semibold underline underline-offset-4">{data.hero.secondary_cta} →</span>}
             </div>
           </div>
-          {hero ? (
+          {hero && (
             // eslint-disable-next-line @next/next/no-img-element
             <img src={hero} alt={data.hero.image.alt ?? ""} className="aspect-[4/3] w-full rounded-lg object-cover" />
-          ) : (
-            <div className="aspect-[4/3] rounded-lg" style={{ background: vars.ink, opacity: 0.08 }} />
           )}
         </section>
         {data.sections.map((s, i) => (

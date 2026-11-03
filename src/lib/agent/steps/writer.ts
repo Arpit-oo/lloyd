@@ -37,7 +37,14 @@ export interface WriteResult {
   callId: string;
 }
 
-export async function writeAsset(brand: Brand, data: CampaignData, memories: MemoryForPrompt[], item: PlanItem, ctx: CallContext): Promise<WriteResult> {
+export async function writeAsset(
+  brand: Brand,
+  data: CampaignData,
+  memories: MemoryForPrompt[],
+  item: PlanItem,
+  ctx: CallContext,
+  onText?: (soFar: string) => void,
+): Promise<WriteResult> {
   const [{ system, channel }, images, web] = await Promise.all([
     writerPrefix(brand, data, memories, item.type, ctx),
     item.image_brief ? imageCandidates(brand, item.type, item.image_brief, ctx) : Promise.resolve([]),
@@ -58,6 +65,7 @@ export async function writeAsset(brand: Brand, data: CampaignData, memories: Mem
     cacheKey: `brand:${brand.hash}`,
     maxOutputTokens: 20_000,
     ctx: { ...ctx, assetId: ctx.assetId },
+    onText,
   });
 
   return {

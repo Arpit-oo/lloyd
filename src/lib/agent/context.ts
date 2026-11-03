@@ -44,6 +44,8 @@ export function campaignBlock(data: CampaignData, memories: MemoryForPrompt[]): 
   if (data.brandCheck?.length)
     parts.push(`Brand check decisions (binding):\n${data.brandCheck.map((c) => `- ${c.requested} -> ${c.verdict.toUpperCase()}: ${c.rule}${c.alternative ? `. Instead: ${c.alternative}` : ""}`).join("\n")}`);
   if (data.answers) parts.push(`Answers from the marketer:\n${data.answers}`);
+  if (data.references?.length)
+    parts.push(`Reference material the marketer attached (use where relevant; brand rules still win):\n${data.references.map((r) => `--- ${r.name} ---\n${r.text.slice(0, 12_000)}`).join("\n\n")}`);
   if (data.plan) parts.push(`Campaign plan:\n${data.plan.summary}\n${data.plan.items.map((i, n) => `${n + 1}. [${i.id}] ${ASSET_LABEL[i.type]}: ${i.title} (${i.audience})`).join("\n")}`);
   if (memories.length) parts.push(`What the marketer told us in earlier campaigns (follow unless this brief says otherwise):\n${memories.map((m) => `- ${m.text}`).join("\n")}`);
   return { label: "campaign", cache: true, text: parts.join("\n\n") };

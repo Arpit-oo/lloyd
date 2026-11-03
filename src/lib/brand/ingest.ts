@@ -10,6 +10,7 @@ import { extractFacts } from "./facts";
 import { deriveGovernance, type Governance } from "./governance";
 import { captionImage, parseImageRules } from "./images";
 import { compileKernel } from "./kernel";
+import { loadBinaryDocs } from "./loaders";
 import { scanBrand, type BrandScan } from "./scan";
 import { fromBlob, getMeta, openBrandDb, setMeta, toBlob, type BrandDB } from "./store";
 
@@ -40,10 +41,14 @@ export interface IngestSummary {
 }
 
 export async function ingestBrand(onProgress: Progress = () => {}): Promise<IngestSummary> {
-  const scan = scanBrand(getConfig().brandDir);
-  const bdb = openBrandDb(scan.hash);
+  const raw = scanBrand(getConfig().brandDir);
+  const bdb = openBrandDb(raw.hash);
   const done = getMeta<IngestSummary>(bdb, "ingest:summary");
   if (done) return { ...done, fromCache: true };
+
+  // PDF and DOCX become text here; anything that fails is reported in the summary.
+  const binary = await loadBinaryDocs(raw.binaryDocs);
+  const scan: BrandScan = { ...raw, docs: [...raw.docs, ...binary.docs], skipped: [...raw.skipped, ...binary.failed] };
 
   const runId = `ingest-${scan.hash}`;
   const ctx = { runId };
@@ -53,9 +58,12 @@ export async function ingestBrand(onProgress: Progress = () => {}): Promise<Inge
   await step("cards", () => buildCards(bdb, scan, ctx, onProgress));
   await step("chunk embeddings", () => embedChunks(bdb, ctx, onProgress));
   const governance = await step("governance", () => buildGovernance(bdb, ctx));
+  applyUserTiers(bdb);
   await step("facts", () => buildFacts(bdb, scan, ctx, onProgress));
   await step("conflicts", () => buildConflicts(bdb, governance, ctx, onProgress));
   compactStoredConflicts(bdb);
+  demoteSupersededDocs(bdb);
+  applyUserTiers(bdb);
   const entities = await step("entities", () => buildEntities(bdb, ctx));
   await step("kernel", () => buildKernel(bdb, governance, entities, ctx));
   await step("images", () => buildImages(bdb, scan, ctx, onProgress));
@@ -171,6 +179,64 @@ async function buildConflicts(bdb: BrandDB, governance: Governance, ctx: { runId
   const resolved = await resolveConflicts(groups, governance, ctx, (d, t) => onProgress({ step: "conflicts", done: d, total: t }));
   writeConflicts(bdb, resolved.map((r) => ({ resolution: r.resolution, factIds: r.facts.map((f) => f.id) })));
   setMeta(bdb, "conflicts:done", true);
+}
+
+/**
+ * Uses conflict outcomes as evidence of supersession. A document that loses to a document of
+ * the same type, and wins nothing, has in practice been replaced by it, whatever its file name
+ * says ("FINAL"). It moves to the lowest tier and the governance record notes why. Without an
+ * explicit governance doc this is what catches an old guidelines file that calls itself final.
+ */
+/**
+ * The third governance layer: a person's decision. Tier changes made in the Brand panel are
+ * stored separately and re-applied after every automatic step, so they always win.
+ */
+export function setUserTier(hash: string, docId: string, tier: number) {
+  const bdb = openBrandDb(hash);
+  const overrides = getMeta<Record<string, number>>(bdb, "user_tiers") ?? {};
+  overrides[docId] = tier;
+  setMeta(bdb, "user_tiers", overrides);
+  applyUserTiers(bdb);
+}
+
+function applyUserTiers(bdb: BrandDB) {
+  const overrides = getMeta<Record<string, number>>(bdb, "user_tiers") ?? {};
+  const gov = getMeta<Governance>(bdb, "governance");
+  const upd = bdb.prepare("UPDATE docs SET tier = ?, tier_reason = ? WHERE id = ?");
+  for (const [doc, tier] of Object.entries(overrides)) {
+    upd.run(tier, "Set by the user in the Brand panel.", doc);
+    if (gov) gov.doc_tiers = gov.doc_tiers.map((d) => (d.doc_id === doc ? { ...d, rank: tier, reason: "Set by the user in the Brand panel." } : d));
+  }
+  if (gov) setMeta(bdb, "governance", gov);
+}
+
+function demoteSupersededDocs(bdb: BrandDB) {
+  const gov = getMeta<Governance>(bdb, "governance");
+  if (!gov) return;
+  const userSet = getMeta<Record<string, number>>(bdb, "user_tiers") ?? {};
+  const type = new Map(allDocs(bdb).map((d) => [d.id, d.card.doc_type]));
+  const docOf = (factId: string) => factId.split("#")[0];
+  const wins = new Map<string, number>();
+  const lostTo = new Map<string, Set<string>>();
+  for (const row of bdb.prepare("SELECT resolution_json FROM conflicts").all() as { resolution_json: string }[]) {
+    const r = JSON.parse(row.resolution_json) as { winner_fact_ids: string[]; loser_fact_ids: string[] };
+    const winnerDocs = new Set(r.winner_fact_ids.map(docOf));
+    winnerDocs.forEach((d) => wins.set(d, (wins.get(d) ?? 0) + 1));
+    for (const loser of new Set(r.loser_fact_ids.map(docOf)))
+      for (const w of winnerDocs) if (w !== loser && type.get(w) === type.get(loser)) lostTo.set(loser, new Set([...(lostTo.get(loser) ?? []), w]));
+  }
+  const lowest = Math.max(...gov.tiers.map((t) => t.rank));
+  const upd = bdb.prepare("UPDATE docs SET tier = ?, tier_reason = ? WHERE id = ?");
+  for (const [doc, winners] of lostTo) {
+    if (wins.get(doc) || doc in userSet) continue;
+    const newer = [...winners][0];
+    const reason = `Lost every conflict to ${newer}, a document of the same type, so treated as superseded by it.`;
+    upd.run(lowest, reason, doc);
+    gov.doc_tiers = gov.doc_tiers.map((d) => (d.doc_id === doc ? { ...d, rank: lowest, reason } : d));
+    if (!gov.supersessions.some((s) => s.older_doc === doc))
+      gov.supersessions.push({ newer_doc: newer, older_doc: doc, evidence: "Inferred from conflict outcomes, not stated in the documents.", stated_in: "conflict resolution" });
+  }
+  setMeta(bdb, "governance", gov);
 }
 
 /** Merges duplicate resolutions and rewrites the conflicts table. Idempotent, no model calls. */

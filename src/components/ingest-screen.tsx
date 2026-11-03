@@ -1,6 +1,6 @@
 "use client";
 
-import { Loader2 } from "lucide-react";
+import { Check, Circle, Loader2 } from "lucide-react";
 import { useState } from "react";
 
 const STEPS = ["scan", "cards", "chunk embeddings", "governance", "facts", "conflicts", "entities", "kernel", "images", "design tokens", "done"];
@@ -42,25 +42,25 @@ export function IngestScreen({ onDone }: { onDone: () => void }) {
   const idx = STEPS.indexOf(step);
   return (
     <div className="flex h-full items-center justify-center p-6">
-      <div className="w-full max-w-xl rounded-2xl bg-white p-8 shadow-sm ring-1 ring-line">
+      <div className="w-full max-w-xl rounded-2xl bg-surface p-8 shadow-sm ring-1 ring-line">
         <h1 className="text-xl font-bold">Index the brand folder</h1>
         <p className="mt-2 text-sm leading-relaxed text-muted">
           First run on this brand folder. I read every document once, work out which ones win when they disagree, pull out the rules and facts, check every image, and compile a short brand kernel. This takes a few minutes and costs about $1–3, once. After that it loads instantly.
         </p>
         {!running && !step && (
-          <button onClick={start} className="mt-6 rounded-lg bg-ink px-4 py-2 text-sm font-semibold text-white">Start indexing</button>
+          <button onClick={start} className="mt-6 rounded-lg bg-ink px-4 py-2 text-sm font-semibold text-on-ink">Start indexing</button>
         )}
         {(running || step) && (
           <ol className="mt-6 space-y-1.5 text-sm">
             {STEPS.slice(0, -1).map((s, i) => (
               <li key={s} className={`flex items-center gap-2 ${i < idx ? "text-ink" : i === idx ? "font-semibold" : "text-muted"}`}>
-                {i < idx ? "✓" : i === idx ? <Loader2 size={14} className="animate-spin" /> : "○"} {s}
+                {i < idx ? <Check size={14} className="text-ok" /> : i === idx ? <Loader2 size={14} className="animate-spin" /> : <Circle size={12} className="text-line-strong" />} {s}
                 {i === idx && <span className="truncate text-xs font-normal text-muted">{detail}</span>}
               </li>
             ))}
           </ol>
         )}
-        {error && <div className="mt-4 rounded-lg bg-rose-50 p-3 text-sm text-rose-800">{error}</div>}
+        {error && <div className="mt-4 rounded-lg bg-bad-soft p-3 text-sm text-bad">{error}</div>}
       </div>
     </div>
   );

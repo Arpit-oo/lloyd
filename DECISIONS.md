@@ -13,9 +13,10 @@
 3. **Governance**, three layers:
    - *Explicit*: find the folder's own rules on which document wins.
    - *Inferred*: if there are none, rank by document type (legal > guidelines > playbooks > reference > notes > past content). Dates and words like FINAL only break ties. That is exactly the trap in `README_start_here.md`.
-   - *User*: the Brand panel shows the result with quotes for a person to check.
+   - *User*: the Brand panel shows the result with quotes. A person can move any document to another tier and re-resolve conflicts; their choice is stored separately and beats both automatic layers on every re-ingest.
 
    On Wickhold it found the brand's own order of authority (explicit, high confidence). On the mini fixture brand, which has no governance doc, it fell back to the inferred order (medium confidence).
+   Conflict outcomes are also used as evidence: a document that loses to a document of the same type, and wins nothing, is treated as superseded and moves to the last tier. That is how the mini brand's `brand-book-2023-FINAL.md` ends up below its 2025 replacement without any document saying so.
 4. **Facts**: about 2,300 atomic, citable rules and claims, each with source, heading, quote, scope and validity dates.
 5. **Conflicts**, found two ways:
    - *Grouping*: similar facts are grouped around high-authority seeds (linear cost; no chaining).
@@ -88,11 +89,10 @@ A typical edit costs about $0.02, and 40–47% of input tokens are read from cac
 
 ## 7. Left out, and why
 
-- **PDF/DOCX loaders.** The sample is all Markdown. Unsupported files are listed in the ingest report, not silently dropped.
-- **Editing the authority order in the UI.** The order is shown and explained, but not editable.
-- **Streaming asset text token by token.** Assets appear whole, with status updates while they are written.
-- **Image generation.** Only the library is used, as the brief says.
-- **A diff view between versions.** There is a version picker instead.
+- **Asset text streaming token by token**: assets appear whole, with live status while they are written. That was enough to judge them, and it kept the schema validation simple.
+- **Image generation**: only the library is used, as the brief says.
+- **Scanned (image-only) PDFs**: PDF and DOCX are read; a PDF with no text layer is reported as failed, not guessed at with OCR.
+- **Automatic re-resolution after an authority change**: changing a document's tier in the Brand panel is saved as a user decision that every later ingest step respects, but re-running conflict resolution is an explicit button (about $0.50), not automatic.
 
 ## 8. Where AI tools led me wrong
 

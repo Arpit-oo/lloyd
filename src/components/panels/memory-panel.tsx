@@ -40,8 +40,8 @@ export function MemoryPanel({ onClose }: { onClose: () => void }) {
   ];
 
   return (
-    <Modal title="Memory" subtitle="What carries over between campaigns. Campaign-specific details and brief overrides are never stored here." onClose={onClose}>
-      <div className="mb-6 flex gap-2 rounded-xl bg-white p-3 ring-1 ring-line">
+    <Modal size="fit" title="Memory" subtitle="What carries over between campaigns. Campaign-specific details and brief overrides are never stored here." onClose={onClose}>
+      <div className="mb-6 flex gap-2 rounded-xl bg-surface p-3 ring-1 ring-line">
         <select value={type} onChange={(e) => setType(e.target.value as MemoryType)} className="rounded-lg bg-panel px-2 text-sm ring-1 ring-line">
           <option value="preference">preference</option>
           <option value="decision">decision</option>
@@ -49,17 +49,17 @@ export function MemoryPanel({ onClose }: { onClose: () => void }) {
           <option value="fact">fact</option>
         </select>
         <input value={draft} onChange={(e) => setDraft(e.target.value)} onKeyDown={(e) => e.key === "Enter" && add()} placeholder="Tell the agent something to remember, e.g. “Keep LinkedIn posts under 120 words”" className="flex-1 rounded-lg bg-panel px-3 py-2 text-sm outline-none ring-1 ring-line focus:ring-ink" />
-        <button onClick={add} className="rounded-lg bg-ink px-4 text-sm font-semibold text-white">Add</button>
+        <button onClick={add} className="rounded-lg bg-ink px-4 text-sm font-semibold text-on-ink">Add</button>
       </div>
       <div className="space-y-6">
         {groups.map(([label, list]) =>
           list.length ? (
             <section key={label}>
               <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted">{label}</h3>
-              <ul className="divide-y divide-line overflow-hidden rounded-xl bg-white ring-1 ring-line">
+              <ul className="divide-y divide-line overflow-hidden rounded-xl bg-surface ring-1 ring-line">
                 {list.map((m) => (
                   <li key={m.id} className="flex items-start gap-3 px-4 py-3 text-sm">
-                    <span className="mt-0.5 rounded bg-accent-soft px-1.5 py-0.5 text-[10px] font-semibold text-accent">{m.type}</span>
+                    <span className="mt-0.5 rounded bg-accent-soft px-1.5 py-0.5 text-[11px] font-semibold text-accent">{m.type}</span>
                     <div className="min-w-0 flex-1">
                       {editing === m.id ? (
                         <input autoFocus value={editText} onChange={(e) => setEditText(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") { patch(m.id, { text: editText }); setEditing(null); } }} onBlur={() => setEditing(null)} className="w-full rounded bg-panel px-2 py-1 outline-none ring-1 ring-ink" />
@@ -73,10 +73,10 @@ export function MemoryPanel({ onClose }: { onClose: () => void }) {
                       </div>
                     </div>
                     <div className="flex shrink-0 items-center gap-1">
-                      {m.status !== "active" && <button onClick={() => patch(m.id, { status: "active" })} className="rounded-md bg-ink px-2 py-1 text-xs text-white">Keep</button>}
+                      {m.status !== "active" && <button onClick={() => patch(m.id, { status: "active" })} className="rounded-md bg-ink px-2 py-1 text-xs text-on-ink">Keep</button>}
                       {m.status === "active" && <button onClick={() => patch(m.id, { status: "archived" })} className="rounded-md px-2 py-1 text-xs ring-1 ring-line">Forget</button>}
                       <button onClick={() => patch(m.id, { pinned: m.pinned ? 0 : 1 })} className={`rounded p-1 ${m.pinned ? "text-accent" : "text-muted"}`} title="Pin"><Pin size={14} /></button>
-                      <button onClick={() => remove(m.id)} className="rounded p-1 text-muted hover:text-rose-600" title="Delete"><Trash2 size={14} /></button>
+                      <button onClick={() => remove(m.id)} className="rounded p-1 text-muted hover:text-bad" title="Delete"><Trash2 size={14} /></button>
                     </div>
                   </li>
                 ))}
