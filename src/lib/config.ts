@@ -1,5 +1,6 @@
 import path from "node:path";
 import { z } from "zod";
+import { activeBrandOverride } from "./brand/active";
 
 /**
  * Single place where environment variables are read and validated.
@@ -23,7 +24,12 @@ const EnvSchema = z.object({
 
 export type Env = z.infer<typeof EnvSchema>;
 
-let cached: (Env & { rootDir: string; brandDir: string; dataDir: string; logsDir: string }) | null = null;
+let cached: (Env & { rootDir: string; brandDir: string; defaultBrandDir: string; dataDir: string; logsDir: string }) | null = null;
+
+/** Forget the cached config (after switching brand), so the next read picks up the change. */
+export function resetConfig() {
+  cached = null;
+}
 
 export function getConfig() {
   if (cached) return cached;
@@ -33,11 +39,14 @@ export function getConfig() {
     throw new Error(`Invalid environment:\n${issues}`);
   }
   const rootDir = process.cwd();
+  const dataDir = path.resolve(rootDir, parsed.data.DATA_DIR);
   cached = {
     ...parsed.data,
     rootDir,
-    brandDir: path.resolve(rootDir, parsed.data.BRAND_DIR),
-    dataDir: path.resolve(rootDir, parsed.data.DATA_DIR),
+    // A brand switched to in the app wins over BRAND_DIR (see brand/active.ts).
+    brandDir: (typeof window === "undefined" ? activeBrandOverride(dataDir) : null) ?? path.resolve(rootDir, parsed.data.BRAND_DIR),
+    defaultBrandDir: path.resolve(rootDir, parsed.data.BRAND_DIR),
+    dataDir,
     logsDir: path.resolve(rootDir, "logs"),
   };
   return cached;

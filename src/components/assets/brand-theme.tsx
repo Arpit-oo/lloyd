@@ -112,7 +112,6 @@ export function BrandTheme({ vars, children, className = "" }: { vars: BrandVars
         } as React.CSSProperties
       }
     >
-      {/* eslint-disable-next-line @next/next/no-page-custom-font */}
       {href && <link rel="stylesheet" href={href} />}
       {children}
     </div>

@@ -78,6 +78,14 @@ export function addMessage(campaignId: string, role: MessageRow["role"], kind: s
   return { id, role, kind, content, created_at: new Date().toISOString() };
 }
 
+/** Saves a finished run's steps on the last assistant message it wrote, for the "Worked for" checklist. */
+export function attachRunLog(campaignId: string, since: number, log: { steps: { text: string; at: number }[]; startedAt: number; endedAt: number }) {
+  const rows = listMessages(campaignId).filter((m) => m.role === "assistant" && Date.parse(m.created_at) >= since - 1000);
+  const last = rows.at(-1);
+  if (!last || !log.steps.length) return;
+  db().prepare("UPDATE messages SET content_json = ? WHERE id = ?").run(JSON.stringify({ ...(last.content as object), runLog: log }), last.id);
+}
+
 export function listMessages(campaignId: string): MessageRow[] {
   return (db().prepare("SELECT id, role, kind, content_json, created_at FROM messages WHERE campaign_id = ? ORDER BY created_at, rowid").all(campaignId) as (Omit<MessageRow, "content"> & { content_json: string })[]).map(
     (m) => ({ id: m.id, role: m.role, kind: m.kind, content: JSON.parse(m.content_json), created_at: m.created_at }),

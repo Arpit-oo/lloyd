@@ -14,6 +14,8 @@ export interface RunInfo {
   startedAt: number;
   steps: { text: string; at: number }[];
   drafts: Record<string, string>;
+  /** What the current step's model is writing right now, as readable text. */
+  live: string;
 }
 
 interface Run {
@@ -27,7 +29,7 @@ const runs = () => (g.__runs ??= new Map());
 export function startRun(campaignId: string, author = "", tab = ""): AbortController {
   runs().get(campaignId)?.ctrl.abort();
   const ctrl = new AbortController();
-  runs().set(campaignId, { ctrl, info: { author, tab, startedAt: Date.now(), steps: [], drafts: {} } });
+  runs().set(campaignId, { ctrl, info: { author, tab, startedAt: Date.now(), steps: [], drafts: {}, live: "" } });
   return ctrl;
 }
 
@@ -48,9 +50,16 @@ export const isRunning = (campaignId: string) => runs().has(campaignId);
 export function recordRunEvent(campaignId: string, e: { type: string; text?: string; assetId?: string }) {
   const info = runs().get(campaignId)?.info;
   if (!info) return;
-  if (e.type === "status" && e.text && info.steps.at(-1)?.text !== e.text) info.steps.push({ text: e.text, at: Date.now() });
+  if (e.type === "status" && e.text && info.steps.at(-1)?.text !== e.text) {
+    info.steps.push({ text: e.text, at: Date.now() });
+    info.live = "";
+  }
+  if (e.type === "live") info.live = e.text ?? "";
   if (e.type === "draft" && e.assetId) info.drafts[e.assetId] = e.text ?? "";
   if (e.type === "asset" && e.assetId) delete info.drafts[e.assetId];
 }
 
 export const runInfo = (campaignId: string): RunInfo | null => runs().get(campaignId)?.info ?? null;
+
+/** Runs in progress across all campaigns (switching brand waits until there are none). */
+export const activeRunCount = () => runs().size;

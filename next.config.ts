@@ -12,6 +12,8 @@ const lanHosts = Object.values(networkInterfaces())
   .map((n) => n!.address);
 
 const nextConfig: NextConfig = {
+  // No Next.js badge in the corner during development; compile and runtime errors still show.
+  devIndicators: false,
   allowedDevOrigins: lanHosts,
   turbopack: {
     rules: {

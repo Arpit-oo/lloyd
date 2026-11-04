@@ -5,16 +5,17 @@ import { useState } from "react";
 import { sendJSON } from "@/lib/client/api";
 import type { BrandView } from "@/lib/client/types";
 import { Modal } from "../ui/modal";
+import { BrandSwitcher } from "./brand-switcher";
 
-type Tab = "authority" | "conflicts" | "names" | "images" | "kernel";
+type Tab = "authority" | "conflicts" | "names" | "images" | "kernel" | "switch";
 
 /** Shows what the brand layer derived from the folder, with evidence, so a person can check it. */
-export function BrandPanel({ brand, onClose, onChanged }: { brand: BrandView; onClose: () => void; onChanged: () => void }) {
-  const [tab, setTab] = useState<Tab>("authority");
+export function BrandPanel({ brand, onClose, onChanged, initialTab = "authority" }: { brand: BrandView; onClose: () => void; onChanged: () => void; initialTab?: Tab }) {
+  const [tab, setTab] = useState<Tab>(initialTab);
   const s = brand.summary;
   return (
     <Modal
-      title={`Brand layer · ${brand.tokens?.brand_name ?? "brand"}`}
+      title={`Brand layer · ${brand.name || brand.tokens?.brand_name || "brand"}`}
       subtitle={s ? `${s.docs} documents → ${s.chunks} sections, ${s.facts} facts, ${brand.conflicts?.length ?? 0} settled conflicts, ${s.usableImages}/${s.images} images usable. One-time ingest cost $${s.costUSD.toFixed(2)}.` : undefined}
       onClose={onClose}
     >
@@ -26,6 +27,7 @@ export function BrandPanel({ brand, onClose, onChanged }: { brand: BrandView; on
             ["names", "Names"],
             ["images", "Images"],
             ["kernel", "Kernel"],
+            ["switch", "Switch brand"],
           ] as [Tab, string][]
         ).map(([t, label]) => (
           <button key={t} onClick={() => setTab(t)} className={`flex-1 rounded-md px-3 py-2 text-sm ${tab === t ? "bg-ink font-semibold text-on-ink" : "text-muted hover:text-ink"}`}>
@@ -37,6 +39,7 @@ export function BrandPanel({ brand, onClose, onChanged }: { brand: BrandView; on
       {tab === "conflicts" && <Conflicts brand={brand} />}
       {tab === "names" && <Names brand={brand} />}
       {tab === "images" && <Images brand={brand} />}
+      {tab === "switch" && <BrandSwitcher />}
       {tab === "kernel" && <p className="mb-3 text-sm text-muted">The short summary of the brand that goes into every prompt. Everything else is looked up per asset.</p>}
       {tab === "kernel" && <pre className="whitespace-pre-wrap rounded-xl bg-surface p-6 font-mono text-[12px] leading-relaxed ring-1 ring-line">{brand.kernel}</pre>}
     </Modal>

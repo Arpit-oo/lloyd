@@ -1,4 +1,7 @@
+import path from "node:path";
 import { currentBrandHash, getBrand } from "@/lib/brand";
+import { knownBrandName } from "@/lib/brand/active";
+import { getConfig } from "@/lib/config";
 import type { IngestSummary } from "@/lib/brand/ingest";
 import { getMeta, openBrandDb } from "@/lib/brand/store";
 import { json } from "@/lib/http/sse";
@@ -32,6 +35,8 @@ export async function GET() {
   return json({
     ready: true,
     hash: brand.hash,
+    // The brand's own name if its documents give one, else the folder's name.
+    name: brand.tokens?.brand_name?.trim() || knownBrandName(getConfig().dataDir, getConfig().brandDir) || path.basename(getConfig().brandDir),
     summary: getMeta<IngestSummary>(brand.db, "ingest:summary"),
     governance: brand.governance,
     docs: docs.map((d) => ({ id: d.id, title: d.title, tier: d.tier, reason: d.tier_reason, card: JSON.parse(d.card_json) })),

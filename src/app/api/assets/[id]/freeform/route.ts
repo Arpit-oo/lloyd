@@ -1,7 +1,7 @@
 import { applyFreeform } from "@/lib/agent/agent";
 import { endRun, isRunning, recordRunEvent, runInfo, startRun } from "@/lib/agent/runs";
 import { FREEFORM_TYPES } from "@/lib/agent/asset-types";
-import { getAsset } from "@/lib/agent/store";
+import { attachRunLog, getAsset } from "@/lib/agent/store";
 import { json } from "@/lib/http/sse";
 
 /**
@@ -32,6 +32,8 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   } catch (err) {
     return json({ error: (err as Error).message }, 500);
   } finally {
+    const info = runInfo(asset.campaign_id);
+    if (info) attachRunLog(asset.campaign_id, info.startedAt, { steps: info.steps, startedAt: info.startedAt, endedAt: Date.now() });
     endRun(asset.campaign_id, ctrl);
   }
 }

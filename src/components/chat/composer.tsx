@@ -1,10 +1,11 @@
 "use client";
 
-import { ArrowUp, Check, ChevronDown, FileText, Loader2, Palette, Paperclip, Square, X } from "lucide-react";
+import { ArrowUp, Check, ChevronDown, FileText, FolderOpen, Loader2, Palette, Paperclip, Square, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { formatBytes, getJSON, uploadFiles } from "@/lib/client/api";
 import type { ModelCatalog } from "@/lib/client/types";
 import type { ModelSettings } from "@/lib/llm/catalog";
+import { droppedFiles as droppedPaths } from "@/lib/client/folder";
 
 /**
  * The message box, built like the composer in modern chat apps:
@@ -21,12 +22,21 @@ export interface Attached {
   note?: string;
 }
 
-const ACCEPT = ".md,.markdown,.txt,.pdf,.docx,.html,.htm,.csv,.json,.png,.jpg,.jpeg,.webp,.gif";
+const ACCEPT = ".md,.markdown,.txt,.pdf,.docx,.pptx,.html,.htm,.csv,.json,.png,.jpg,.jpeg,.webp,.gif";
+const ACCEPTED = new Set(ACCEPT.split(","));
+const extOf = (name: string) => (/\.[^.]+$/.exec(name.toLowerCase())?.[0] ?? "");
+
+/** Asset types to ask for from the start screen (appended to the brief as a plain sentence). */
+const ASSET_CHIPS = ["LinkedIn post", "X post", "Blog post", "Landing page", "Email"] as const;
+const CHIP_TYPE: Record<(typeof ASSET_CHIPS)[number], string> = { "LinkedIn post": "linkedin_post", "X post": "x_post", "Blog post": "blog_post", "Landing page": "landing_page", Email: "email" };
+
+/** Files from a drop, including everything inside dropped folders. */
+const droppedFiles = async (dt: DataTransfer) => (await droppedPaths(dt)).map((p) => p.file);
 
 export function Composer({ draft, setDraft, onSend, onStop, onThemes, busy, disabled, placeholder, large, models, setModels, inputRef, enterToSend = true }: {
   draft: string;
   setDraft: (t: string) => void;
-  onSend: (text: string, attachmentIds: string[]) => void;
+  onSend: (text: string, attachmentIds: string[], assetTypes?: string[]) => void;
   onStop: () => void;
   /** Opens the theme picker (also typed as /theme). */
   onThemes: () => void;
@@ -45,6 +55,8 @@ export function Composer({ draft, setDraft, onSend, onStop, onThemes, busy, disa
   const localRef = useRef<HTMLTextAreaElement>(null);
   const ref = inputRef ?? localRef;
   const picker = useRef<HTMLInputElement>(null);
+  const folderPicker = useRef<HTMLInputElement>(null);
+  const [wanted, setWanted] = useState<string[]>([]);
 
   useEffect(() => {
     const el = ref.current;
@@ -53,7 +65,23 @@ export function Composer({ draft, setDraft, onSend, onStop, onThemes, busy, disa
     el.style.height = `${Math.min(el.scrollHeight, 300)}px`;
   }, [draft, ref]);
 
-  const addFiles = async (list: File[]) => {
+  const addFiles = async (all: File[]) => {
+    // Files the app can't read (a database, an archive, ...) are explained here, not uploaded.
+    const skipped = all.filter((f) => !ACCEPTED.has(extOf(f.name)));
+    if (skipped.length) {
+      const kinds = [...new Set(skipped.map((f) => extOf(f.name) || "no extension"))].join(", ");
+      setFiles((cur) => [
+        ...cur,
+        {
+          key: `skip-${Math.random()}`,
+          name: skipped.length === 1 ? skipped[0].name : `${skipped.length} files skipped`,
+          size: 0,
+          status: "error",
+          error: `Can't read ${kinds}. Attach briefs as PDF, Word, PowerPoint, Markdown or text, or images as references.`,
+        },
+      ]);
+    }
+    const list = all.filter((f) => ACCEPTED.has(extOf(f.name)));
     if (!list.length) return;
     const pending = list.map((f) => ({ key: `${f.name}-${f.size}-${Math.random()}`, name: f.name, size: f.size, status: "uploading" as const }));
     setFiles((cur) => [...cur, ...pending]);
@@ -76,9 +104,11 @@ export function Composer({ draft, setDraft, onSend, onStop, onThemes, busy, disa
 
   const send = () => {
     if (!canSend) return;
-    onSend(draft.trim(), ready.map((f) => f.id!));
+    const ask = wanted.length ? `\n\nAssets I want: ${wanted.join(", ")}.` : "";
+    onSend(`${draft.trim()}${ask}`.trim(), ready.map((f) => f.id!), wanted.map((w) => CHIP_TYPE[w as keyof typeof CHIP_TYPE]));
     setDraft("");
     setFiles([]);
+    setWanted([]);
   };
 
   return (
@@ -90,13 +120,13 @@ export function Composer({ draft, setDraft, onSend, onStop, onThemes, busy, disa
         }
       }}
       onDragLeave={() => setDrag(false)}
-      onDrop={(e) => {
+      onDrop={async (e) => {
         e.preventDefault();
         setDrag(false);
-        addFiles([...e.dataTransfer.files]);
+        addFiles(await droppedFiles(e.dataTransfer));
       }}
       data-glass
-      className={`shadow-float rounded-[22px] border bg-surface px-3 pb-2.5 pt-3 transition-colors focus-within:border-line-strong ${drag ? "border-accent ring-2 ring-accent/25" : "border-line"}`}
+      className={`shadow-float rounded-[22px] border bg-surface px-3 pb-2.5 pt-3 transition-colors focus-within:border-accent focus-within:ring-2 focus-within:ring-accent/25 ${drag ? "border-accent ring-2 ring-accent/25" : "border-line"}`}
     >
       {files.length > 0 && (
         <ul className="mb-2 flex flex-wrap gap-2 px-1" aria-label="Attached files">
@@ -148,8 +178,19 @@ export function Composer({ draft, setDraft, onSend, onStop, onThemes, busy, disa
       />
       <div className="mt-2 flex items-center gap-1.5">
         <input ref={picker} type="file" multiple accept={ACCEPT} className="hidden" onChange={(e) => { addFiles([...(e.target.files ?? [])]); e.target.value = ""; }} />
+        <input
+          ref={folderPicker}
+          type="file"
+          multiple
+          className="hidden"
+          {...({ webkitdirectory: "", directory: "" } as Record<string, string>)}
+          onChange={(e) => { addFiles([...(e.target.files ?? [])]); e.target.value = ""; }}
+        />
         <button onClick={() => picker.current?.click()} aria-label="Attach files" title="Attach files (PDF, Word, Markdown, text)" className="flex h-8 w-8 max-sm:h-10 max-sm:w-10 items-center justify-center rounded-lg text-muted hover:bg-ink/5 hover:text-ink">
           <Paperclip size={17} />
+        </button>
+        <button onClick={() => folderPicker.current?.click()} aria-label="Attach a folder" title="Attach a folder (readable files inside are attached)" className="flex h-8 w-8 max-sm:h-10 max-sm:w-10 items-center justify-center rounded-lg text-muted hover:bg-ink/5 hover:text-ink">
+          <FolderOpen size={17} />
         </button>
         <ModelMenu models={models} setModels={setModels} />
         <button onClick={onThemes} aria-label="Themes" title="Themes (or type /theme)" className="flex h-8 w-8 max-sm:h-10 max-sm:w-10 items-center justify-center rounded-lg text-muted hover:bg-ink/5 hover:text-ink">
@@ -157,16 +198,34 @@ export function Composer({ draft, setDraft, onSend, onStop, onThemes, busy, disa
         </button>
         <div className="ml-auto">
           {busy ? (
-            <button onClick={onStop} aria-label="Stop" title="Stop" className="flex h-8 w-8 max-sm:h-10 max-sm:w-10 items-center justify-center rounded-lg bg-ink text-on-ink hover:opacity-90">
+            <button data-send onClick={onStop} aria-label="Stop" title="Stop" className="flex h-8 w-8 max-sm:h-10 max-sm:w-10 items-center justify-center rounded-lg bg-ink text-on-ink hover:opacity-90">
               <Square size={13} fill="currentColor" />
             </button>
           ) : (
-            <button onClick={send} disabled={!canSend} aria-label="Send" title="Send (Enter)" className="flex h-8 w-8 max-sm:h-10 max-sm:w-10 items-center justify-center rounded-lg bg-accent text-on-accent transition hover:brightness-95 disabled:bg-ink/15 disabled:text-muted">
+            <button data-send onClick={send} disabled={!canSend} aria-label="Send" title="Send (Enter)" className="flex h-8 w-8 max-sm:h-10 max-sm:w-10 items-center justify-center rounded-lg bg-accent text-on-accent transition hover:brightness-95 disabled:bg-ink/15 disabled:text-muted">
               <ArrowUp size={17} />
             </button>
           )}
         </div>
       </div>
+      {large && (
+        <div role="group" aria-label="Assets to create" className="-mx-3 -mb-2.5 mt-2.5 flex flex-wrap items-center gap-1.5 rounded-b-[22px] border-t border-line bg-panel/60 px-4 py-2">
+          <span className="mr-1 text-[12.5px] text-muted">Create</span>
+          {ASSET_CHIPS.map((c) => {
+            const on = wanted.includes(c);
+            return (
+              <button
+                key={c}
+                aria-pressed={on}
+                onClick={() => setWanted((w) => (on ? w.filter((x) => x !== c) : [...w, c]))}
+                className={`flex items-center gap-1 rounded-full px-2.5 py-1 text-[12.5px] transition-colors ${on ? "bg-accent-soft font-medium text-accent-ink" : "text-muted hover:bg-ink/5 hover:text-ink"}`}
+              >
+                {on && <Check size={12} />} {c}
+              </button>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }

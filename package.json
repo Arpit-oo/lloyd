@@ -14,10 +14,12 @@
     "brief": "tsx --env-file=.env scripts/run-brief.ts",
     "eval": "node scripts/clean-eval-data.mjs && cross-env DATA_DIR=./data/eval tsx --env-file=.env scripts/eval.ts",
     "bench": "node scripts/clean-eval-data.mjs && cross-env DATA_DIR=./data/eval tsx --env-file=.env scripts/eval.ts --write-costs",
-    "seed": "tsx --env-file=.env scripts/make-seed.ts"
+    "seed": "tsx --env-file=.env scripts/make-seed.ts",
+    "export": "tsx --env-file-if-exists=.env scripts/export-campaigns.ts"
   },
   "dependencies": {
     "better-sqlite3": "^13.0.3",
+    "jszip": "^3.10.2",
     "lucide-react": "^1.67.0",
     "mammoth": "^1.13.0",
     "next": "16.4.3",

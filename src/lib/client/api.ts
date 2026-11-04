@@ -24,6 +24,8 @@ export interface OutgoingMessage {
   models?: ModelSettings;
   /** Shown next to the message in shared chats. */
   author?: string;
+  /** Asset types picked with the chips on the start screen. */
+  assetTypes?: string[];
 }
 
 /** A per-tab id for presence: two tabs (or two people) on one campaign count as two viewers. */

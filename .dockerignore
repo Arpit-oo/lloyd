@@ -1,0 +1,13 @@
+node_modules
+.next
+.git
+.env
+.env.*
+data
+logs
+.playwright-mcp
+wickhold-candidate-package
+wickhold-candidate-package.zip
+*.pdf
+*.tsbuildinfo
+.vscode

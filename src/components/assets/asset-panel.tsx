@@ -1,6 +1,6 @@
 "use client";
 
-import { AlertTriangle, ArrowLeft, Check, CheckCircle2, Copy, Download, FileText, LayoutTemplate, Loader2, RefreshCw, ShieldAlert, Wand2, X } from "lucide-react";
+import { AlertTriangle, ArrowLeft, Check, CheckCircle2, Copy, Download, FileText, ChevronDown, LayoutTemplate, Loader2, RefreshCw, ShieldAlert, Wand2, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import { ASSET_LABEL, assetToText, FREEFORM_TYPES, type AssetContent } from "@/lib/agent/asset-types";
 import { diffWords } from "@/lib/text/diff";
@@ -34,7 +34,49 @@ export function AssetPanel({ assets, drafts = {}, tokens, selected, focus, onSel
   closeLabel?: string;
 }) {
   const vars = brandVars(tokens);
-  const asset = assets.find((a) => a.id === selected) ?? assets[0];
+  // Closed tabs, per campaign, saved in this browser: asset id -> version when it was closed.
+  // A closed asset comes back by itself when it changes, or when it is opened from the chat.
+  const campaignId = assets[0]?.campaign_id ?? "";
+  const closedKey = `lloyd-closed:${campaignId}`;
+  const [closed, setClosedState] = useState<Record<string, number>>(() => {
+    try {
+      return JSON.parse(localStorage.getItem(closedKey) ?? "{}") as Record<string, number>;
+    } catch {
+      return {};
+    }
+  });
+  const setClosed = (next: Record<string, number>) => {
+    setClosedState(next);
+    if (Object.keys(next).length) localStorage.setItem(closedKey, JSON.stringify(next));
+    else localStorage.removeItem(closedKey);
+  };
+  // "Opened from outside" means the selection just changed to that asset (a chat link, an edit).
+  const [prevSelected, setPrevSelected] = useState(selected);
+  const openedNow = selected !== prevSelected ? selected : null;
+  if (selected !== prevSelected) setPrevSelected(selected);
+  const stale = Object.keys(closed).filter((id) => {
+    const a = assets.find((x) => x.id === id);
+    return !a || a.current_version > closed[id] || id === openedNow;
+  });
+  if (stale.length) setClosed(Object.fromEntries(Object.entries(closed).filter(([id]) => !stale.includes(id))));
+  const isClosed = (id: string) => id in closed && !stale.includes(id);
+  const visible = assets.filter((a) => !isClosed(a.id));
+  const hidden = assets.filter((a) => isClosed(a.id));
+  const [closedMenu, setClosedMenu] = useState(false);
+  const asset = visible.find((a) => a.id === selected) ?? visible[0];
+  const closeTab = (a: Asset) => {
+    if (a.id === asset?.id) {
+      const i = visible.findIndex((x) => x.id === a.id);
+      const next = visible[i + 1] ?? visible[i - 1];
+      if (next) onSelect(next.id);
+    }
+    setClosed({ ...closed, [a.id]: a.current_version });
+  };
+  const reopen = (id?: string) => {
+    setClosed(id ? Object.fromEntries(Object.entries(closed).filter(([k]) => k !== id)) : {});
+    if (id) onSelect(id);
+    setClosedMenu(false);
+  };
   // Versions already seen, so assets that changed since show an "updated" dot.
   const [seen, setSeen] = useState<Record<string, number>>(() => Object.fromEntries(assets.map((a) => [a.id, a.current_version])));
   // Adjust during render (React's pattern for state derived from props): assets that appear later
@@ -77,28 +119,69 @@ export function AssetPanel({ assets, drafts = {}, tokens, selected, focus, onSel
           <RefreshCw size={16} className={refreshing ? "animate-spin" : ""} />
         </button>
         <div role="tablist" aria-label="Assets" className="flex min-w-0 flex-1 gap-1 overflow-x-auto">
-          {assets.map((a, i) => {
+          {visible.map((a) => {
             const guard = a.current?.guard as GuardReport | null;
             const selectedTab = a.id === asset?.id;
+            const n = assets.indexOf(a) + 1;
             return (
-              <button
-                key={a.id}
-                role="tab"
-                aria-selected={selectedTab}
-                onClick={() => select(a.id)}
-                className={`flex shrink-0 items-center gap-2 rounded-t-lg border border-b-0 px-3 py-2 text-[13px] ${selectedTab ? "border-line bg-panel font-semibold" : "border-transparent text-muted hover:text-ink"}`}
-              >
-                <StatusDot status={a.status} guard={guard?.status} />
-                <span className="tabular text-muted">{i + 1}.</span>
-                <span className="max-w-44 truncate">{a.title}</span>
-                {!selectedTab && seen[a.id] !== undefined && a.current_version > seen[a.id] && (
-                  <span className="rounded-full bg-accent px-1.5 py-px text-[10.5px] font-semibold text-on-accent" title="Changed since you last looked">updated</span>
-                )}
-              </button>
+              <div key={a.id} className={`group flex shrink-0 items-center rounded-t-lg border border-b-0 ${selectedTab ? "border-line bg-panel" : "border-transparent"}`}>
+                <button
+                  role="tab"
+                  aria-selected={selectedTab}
+                  onClick={() => select(a.id)}
+                  className={`flex items-center gap-2 py-2 pl-3 pr-1 text-[13px] ${selectedTab ? "font-semibold" : "text-muted hover:text-ink"}`}
+                >
+                  <StatusDot status={a.status} guard={guard?.status} />
+                  <span className="tabular text-muted">{n}.</span>
+                  <span className="max-w-44 truncate">{a.title}</span>
+                  {!selectedTab && seen[a.id] !== undefined && a.current_version > seen[a.id] && (
+                    <span className="rounded-full bg-accent px-1.5 py-px text-[10.5px] font-semibold text-on-accent" title="Changed since you last looked">updated</span>
+                  )}
+                </button>
+                <button
+                  onClick={() => closeTab(a)}
+                  aria-label={`Close ${a.title}`}
+                  title="Close this tab (reopen it from Closed)"
+                  className={`mr-1.5 rounded p-0.5 text-muted hover:bg-ink/10 hover:text-ink max-sm:opacity-100 ${selectedTab ? "opacity-100" : "opacity-0 focus:opacity-100 group-hover:opacity-100"}`}
+                >
+                  <X size={13} />
+                </button>
+              </div>
             );
           })}
         </div>
+        {hidden.length > 0 && (
+          <div className="relative mb-1.5 shrink-0">
+            <button
+              onClick={() => setClosedMenu((o) => !o)}
+              aria-haspopup="menu"
+              aria-expanded={closedMenu}
+              className="flex items-center gap-1 rounded-lg border border-line bg-panel px-2 py-1 text-[12.5px] text-muted hover:border-line-strong hover:text-ink"
+            >
+              Closed ({hidden.length}) <ChevronDown size={13} />
+            </button>
+            {closedMenu && (
+              <div role="menu" className="shadow-float absolute right-0 top-9 z-30 w-72 rounded-xl border border-line bg-surface p-1">
+                {hidden.map((a) => (
+                  <button key={a.id} role="menuitem" onClick={() => reopen(a.id)} className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left text-[13px] hover:bg-ink/5">
+                    <span className="tabular text-muted">{assets.indexOf(a) + 1}.</span>
+                    <span className="truncate">{a.title}</span>
+                  </button>
+                ))}
+                <button role="menuitem" onClick={() => reopen()} className="mt-1 w-full border-t border-line px-2.5 py-1.5 text-left text-[13px] font-medium text-accent-ink hover:bg-ink/5">
+                  Reopen all
+                </button>
+              </div>
+            )}
+          </div>
+        )}
       </div>
+      {!asset && (
+        <div className="flex flex-1 flex-col items-center justify-center gap-3 text-center text-muted">
+          <div className="text-sm">All assets are closed.</div>
+          <button onClick={() => reopen()} className="rounded-lg bg-ink px-3.5 py-2 text-[13px] font-semibold text-on-ink">Reopen all</button>
+        </div>
+      )}
       {asset && (
         <AssetDetail
           key={`${asset.id}:${refreshN}:${focus?.id === asset.id ? focus.n : 0}`}

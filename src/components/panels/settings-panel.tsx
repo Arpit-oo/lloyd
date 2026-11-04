@@ -102,6 +102,20 @@ function AppearanceSection({ appearance, change }: { appearance: Appearance; cha
   };
   return (
     <section>
+      <Row title="Style" hint="Magi: white, clean, magenta accent. Classic: warm paper and serif headings.">
+        <div role="radiogroup" aria-label="Style" className="flex gap-1 rounded-lg bg-ink/5 p-0.5">
+          {(
+            [
+              ["magi", "Magi"],
+              ["classic", "Classic"],
+            ] as const
+          ).map(([st, label]) => (
+            <button key={st} role="radio" aria-checked={appearance.style === st} onClick={(e) => change({ ...appearance, style: st }, origin(e))} className={`rounded-md px-3 py-1.5 text-[13px] ${appearance.style === st ? "bg-surface text-ink shadow-sm" : "text-muted hover:text-ink"}`}>
+              {label}
+            </button>
+          ))}
+        </div>
+      </Row>
       <Row title="Mode" hint={appearance.wallpaper ? "A wallpaper sets its own light or dark look. Pick a plain theme to use this." : "Light, dark, or follow your system."}>
         <div role="radiogroup" aria-label="Mode" className="flex gap-1 rounded-lg bg-ink/5 p-0.5">
           {(
@@ -111,7 +125,7 @@ function AppearanceSection({ appearance, change }: { appearance: Appearance; cha
               ["system", Monitor, "System"],
             ] as const
           ).map(([m, Icon, label]) => (
-            <button key={m} role="radio" aria-checked={!appearance.wallpaper && appearance.mode === m} onClick={(e) => change({ mode: m, wallpaper: null }, origin(e))} className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-[13px] ${!appearance.wallpaper && appearance.mode === m ? "bg-surface text-ink shadow-sm" : "text-muted hover:text-ink"}`}>
+            <button key={m} role="radio" aria-checked={!appearance.wallpaper && appearance.mode === m} onClick={(e) => change({ ...appearance, mode: m, wallpaper: null }, origin(e))} className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-[13px] ${!appearance.wallpaper && appearance.mode === m ? "bg-surface text-ink shadow-sm" : "text-muted hover:text-ink"}`}>
               <Icon size={14} /> {label}
             </button>
           ))}
@@ -218,7 +232,7 @@ function About({ brand }: { brand: BrandView }) {
       </div>
       <dl className="grid w-full grid-cols-[auto_1fr] gap-x-6 gap-y-2 text-[14px]">
         <dt className="text-muted">Brand</dt>
-        <dd>{brand.tokens?.brand_name ?? "Unknown"}</dd>
+        <dd>{brand.name || brand.tokens?.brand_name || "Unknown"}</dd>
         {s && (
           <>
             <dt className="text-muted">Brand index</dt>

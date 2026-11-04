@@ -1,6 +1,7 @@
 "use client";
 
-import { Brain, Library, MoreHorizontal, Palette, PanelLeftClose, Pencil, ScrollText, Search, Settings, SquarePen, Trash2 } from "lucide-react";
+import { Brain, Check, ChevronsUpDown, FolderPlus, Library, Loader2, MoreHorizontal, Palette, PanelLeftClose, Pencil, ScrollText, Search, Settings, SquarePen, Trash2 } from "lucide-react";
+import { listBrands, switchBrand, type BrandList } from "@/lib/client/brands";
 import { Bee } from "./brand/bee";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { CampaignListItem } from "@/lib/client/types";
@@ -14,7 +15,7 @@ const STATE: Record<string, { label: string; dot: string }> = {
 };
 
 /** Campaign history, grouped by recency, searchable, with rename / delete. */
-export function Sidebar({ campaigns, activeId, onOpen, onNew, onRename, onDelete, onClose, brandName, onBrand, onMemory, onInspector, inspectorEnabled, themeName, onThemes, onSettings, showMascot }: {
+export function Sidebar({ campaigns, activeId, onOpen, onNew, onRename, onDelete, onClose, brandName, onBrand, onAddBrand, onQuickSwitch, onMemory, onInspector, inspectorEnabled, themeName, onThemes, onSettings, showMascot }: {
   campaigns: CampaignListItem[];
   activeId: string | null;
   onOpen: (id: string) => void;
@@ -24,6 +25,8 @@ export function Sidebar({ campaigns, activeId, onOpen, onNew, onRename, onDelete
   onClose: () => void;
   brandName: string;
   onBrand: () => void;
+  onAddBrand: () => void;
+  onQuickSwitch: () => void;
   onMemory: () => void;
   onInspector: () => void;
   inspectorEnabled: boolean;
@@ -46,14 +49,16 @@ export function Sidebar({ campaigns, activeId, onOpen, onNew, onRename, onDelete
           <PanelLeftClose size={18} />
         </button>
       </div>
+      <BrandMenu brandName={brandName} onAddBrand={onAddBrand} onBrand={onBrand} onQuickSwitch={onQuickSwitch} />
       <button onClick={onNew} title="New campaign (Ctrl+Shift+O)" className="mx-2 flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-[14px] font-medium hover:bg-ink/5">
         <span className="flex h-6 w-6 items-center justify-center rounded-full bg-accent text-on-accent"><SquarePen size={13} /></span>
         New campaign
       </button>
-      <div className="mx-2 mt-2 flex items-center gap-2 rounded-lg px-2.5 py-1.5 text-muted focus-within:bg-ink/5">
+      <div className="mx-2 mt-2 flex items-center gap-2 rounded-lg px-2.5 py-0.5 text-muted ring-accent focus-within:bg-ink/5 focus-within:ring-2">
         <Search size={15} className="shrink-0" />
         <label htmlFor="campaign-search" className="sr-only">Search campaigns</label>
-        <input id="campaign-search" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search campaigns" className="w-full bg-transparent text-[13.5px] text-ink outline-none placeholder:text-muted" />
+        <input id="campaign-search" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search campaigns" className="w-full bg-transparent py-1 text-[13.5px] text-ink outline-none placeholder:text-muted" />
+        <button onClick={onQuickSwitch} title="Switch campaign or brand (Ctrl+K)" className="min-h-6 shrink-0 rounded border border-line px-1.5 font-mono text-[11px] text-muted hover:border-line-strong hover:text-ink">Ctrl K</button>
       </div>
 
       <div className="mt-2 min-h-0 flex-1 overflow-y-auto px-2 pb-2">
@@ -78,6 +83,88 @@ export function Sidebar({ campaigns, activeId, onOpen, onNew, onRename, onDelete
         <SideLink icon={<Settings size={16} />} label="Settings" onClick={onSettings} hint="Settings (Ctrl+,)" />
       </div>
     </nav>
+  );
+}
+
+/** The brand Lloyd is working on, with one-click switching to any other brand and "Add a new brand". */
+function BrandMenu({ brandName, onAddBrand, onBrand, onQuickSwitch }: { brandName: string; onAddBrand: () => void; onBrand: () => void; onQuickSwitch: () => void }) {
+  const [open, setOpen] = useState(false);
+  const [brands, setBrands] = useState<BrandList | null>(null);
+  const [switching, setSwitching] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const root = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    listBrands().then(setBrands).catch(() => null);
+    const onDoc = (e: MouseEvent) => {
+      if (!root.current?.contains(e.target as Node)) setOpen(false);
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setOpen(false);
+    };
+    document.addEventListener("mousedown", onDoc);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDoc);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [open]);
+
+  const go = async (dir: string) => {
+    setSwitching(dir);
+    setError(null);
+    try {
+      await switchBrand(dir);
+    } catch (e) {
+      setError((e as Error).message);
+      setSwitching(null);
+    }
+  };
+  const close = (then: () => void) => () => {
+    setOpen(false);
+    then();
+  };
+  const item = "flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left text-[13.5px] hover:bg-ink/5 disabled:opacity-50";
+
+  return (
+    <div ref={root} className="relative mx-2 mb-1">
+      <button
+        onClick={() => setOpen(!open)}
+        aria-haspopup="menu"
+        aria-expanded={open}
+        title="Switch brand"
+        className="flex w-full items-center gap-2.5 rounded-lg border border-line bg-surface/60 px-2.5 py-2 text-left hover:border-line-strong"
+      >
+        <span aria-hidden className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-ink text-[12px] font-semibold uppercase text-on-ink">{brandName.trim()[0] ?? "B"}</span>
+        <span className="min-w-0 flex-1">
+          <span className="block text-[11px] leading-tight text-muted">Brand</span>
+          <span className="block truncate text-[13.5px] font-medium leading-tight">{brandName}</span>
+        </span>
+        <ChevronsUpDown size={15} className="shrink-0 text-muted" aria-hidden />
+      </button>
+      {open && (
+        <div role="menu" className="shadow-float absolute left-0 right-0 top-full z-30 mt-1 rounded-xl border border-line bg-surface p-1">
+          {!brands ? (
+            <div className="flex items-center gap-2 px-2.5 py-2 text-[13px] text-muted"><Loader2 size={14} className="animate-spin" /> Loading brands…</div>
+          ) : (
+            brands.options.map((b) => (
+              <button key={b.dir} role="menuitem" disabled={!!switching} onClick={() => (b.active ? setOpen(false) : go(b.dir))} title={b.dir} className={item}>
+                <span className="min-w-0 flex-1 truncate">{b.name}</span>
+                {b.active ? <Check size={14} className="shrink-0 text-ok" aria-label="In use" /> : switching === b.dir ? <Loader2 size={14} className="shrink-0 animate-spin" /> : null}
+              </button>
+            ))
+          )}
+          <div className="my-1 border-t border-line" />
+          <button role="menuitem" onClick={close(onAddBrand)} className={item}><FolderPlus size={15} /> Add a new brand…</button>
+          <button role="menuitem" onClick={close(onBrand)} className={item}><Library size={15} /> What Lloyd knows about this brand</button>
+          <button role="menuitem" onClick={close(onQuickSwitch)} className={item}>
+            <Search size={15} /> <span className="flex-1">Switch campaign or brand</span> <span className="font-mono text-[11px] text-muted">Ctrl K</span>
+          </button>
+          {error && <p role="alert" className="mx-1 my-1 rounded-lg bg-bad-soft px-2.5 py-2 text-[12.5px] text-ink">{error}</p>}
+        </div>
+      )}
+    </div>
   );
 }
 

@@ -2,6 +2,7 @@
 
 import { Check, Circle, Loader2 } from "lucide-react";
 import { useState } from "react";
+import { BrandSwitcher } from "./panels/brand-switcher";
 
 const STEPS = ["scan", "cards", "chunk embeddings", "governance", "facts", "conflicts", "entities", "kernel", "images", "design tokens", "done"];
 
@@ -11,6 +12,7 @@ export function IngestScreen({ onDone }: { onDone: () => void }) {
   const [step, setStep] = useState<string>("");
   const [detail, setDetail] = useState<string>("");
   const [error, setError] = useState<string | null>(null);
+  const [switching, setSwitching] = useState(false);
 
   const start = async () => {
     setRunning(true);
@@ -42,13 +44,23 @@ export function IngestScreen({ onDone }: { onDone: () => void }) {
   const idx = STEPS.indexOf(step);
   return (
     <div className="flex h-full items-center justify-center p-6">
-      <div className="w-full max-w-xl rounded-2xl bg-surface p-8 shadow-sm ring-1 ring-line">
+      <div className="w-full max-w-3xl rounded-2xl bg-surface p-8 shadow-sm ring-1 ring-line">
         <h1 className="text-xl font-bold">Index the brand folder</h1>
         <p className="mt-2 text-sm leading-relaxed text-muted">
           First run on this brand folder. I read every document once, work out which ones win when they disagree, pull out the rules and facts, check every image, and compile a short brand kernel. This takes a few minutes and costs about $1–3, once. After that it loads instantly.
         </p>
         {!running && !step && (
-          <button onClick={start} className="mt-6 rounded-lg bg-ink px-4 py-2 text-sm font-semibold text-on-ink">Start indexing</button>
+          <div className="mt-6 flex flex-wrap items-center gap-3">
+            <button onClick={start} className="rounded-lg bg-ink px-4 py-2 text-sm font-semibold text-on-ink">Start indexing</button>
+            <button onClick={() => setSwitching((v) => !v)} className="rounded-lg border border-line px-4 py-2 text-sm hover:border-line-strong">
+              {switching ? "Hide brands" : "Use another brand instead"}
+            </button>
+          </div>
+        )}
+        {switching && !running && (
+          <div className="mt-6 border-t border-line pt-6">
+            <BrandSwitcher />
+          </div>
         )}
         {(running || step) && (
           <ol className="mt-6 space-y-1.5 text-sm">

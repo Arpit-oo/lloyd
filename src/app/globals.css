@@ -61,9 +61,82 @@
   color-scheme: dark;
 }
 
+/*
+ * Magi style (the default): white canvas, hairline borders, near-black grotesk type, magenta
+ * accent, headings in the sans. Classic is the warm paper look above. Both have light and dark,
+ * and wallpapers override the colours with their own tokens either way.
+ */
+html {
+  --font-ui: var(--font-app-sans);
+  --font-display: var(--font-app-serif);
+}
+html.magi {
+  --font-ui: var(--font-magi-sans);
+  --font-display: var(--font-magi-sans);
+}
+.magi {
+  --c-paper: #ffffff;
+  --c-sidebar: #fafafa;
+  --c-panel: #f7f7f8;
+  --c-surface: #ffffff;
+  --c-bubble: #f2f2f4;
+  --c-line: #ebebee;
+  --c-line-strong: #d6d6dc;
+  --c-ink: #111113;
+  --c-muted: #64646d;
+  --c-accent: #d936c4;
+  --c-accent-ink: #a3168f;
+  --c-accent-soft: #fceaf9;
+  --c-on-accent: #ffffff;
+  --c-on-ink: #ffffff;
+  --c-ok: #15803d;
+  --c-ok-soft: #e9f7ee;
+  --c-warn: #8f5507;
+  --c-warn-soft: #fff4e0;
+  --c-bad: #b42318;
+  --c-bad-soft: #fdecea;
+  --c-canvas: #f3f3f5;
+  --c-shadow: 17 17 19;
+  color-scheme: light;
+}
+.magi.dark {
+  --c-paper: #0c0c0e;
+  --c-sidebar: #101013;
+  --c-panel: #16161a;
+  --c-surface: #1b1b20;
+  --c-bubble: #232329;
+  --c-line: #2a2a31;
+  --c-line-strong: #3b3b44;
+  --c-ink: #f3f3f5;
+  --c-muted: #a3a3ad;
+  --c-accent: #f06be0;
+  --c-accent-ink: #f7a3ee;
+  --c-accent-soft: #3a1435;
+  --c-on-accent: #1a0717;
+  --c-on-ink: #0c0c0e;
+  --c-ok: #6fd99b;
+  --c-ok-soft: #12301f;
+  --c-warn: #f2c46a;
+  --c-warn-soft: #362a14;
+  --c-bad: #f59a8f;
+  --c-bad-soft: #3d1c18;
+  --c-canvas: #08080a;
+  --c-shadow: 0 0 0;
+  color-scheme: dark;
+}
+/* Magi details: round send button, tighter display tracking. */
+.magi [data-send] {
+  border-radius: 9999px;
+}
+.magi .font-serif {
+  font-style: normal;
+  letter-spacing: -0.02em;
+  font-weight: 500;
+}
+
 @theme inline {
-  --font-sans: var(--font-app-sans);
-  --font-serif: var(--font-app-serif);
+  --font-sans: var(--font-ui);
+  --font-serif: var(--font-display);
   --font-mono: var(--font-app-mono);
   --color-paper: var(--c-paper);
   --color-sidebar: var(--c-sidebar);
@@ -94,7 +167,7 @@ html,
 body {
   background: var(--c-paper);
   color: var(--c-ink);
-  font-family: var(--font-app-sans), system-ui, sans-serif;
+  font-family: var(--font-ui), system-ui, sans-serif;
 }
 
 /* Browser surfaces carry the design too. */
@@ -143,8 +216,10 @@ textarea {
   to { clip-path: circle(150vmax at var(--rx, 50%) var(--ry, 50%)); }
 }
 
-.shadow-float {
-  box-shadow: 0 1px 2px rgb(var(--c-shadow) / 0.06), 0 8px 24px -6px rgb(var(--c-shadow) / 0.12);
+/* A utility (not a plain class) so focus rings compose with it instead of being overridden. */
+@utility shadow-float {
+  --tw-shadow: 0 1px 2px rgb(var(--c-shadow) / 0.06), 0 8px 24px -6px rgb(var(--c-shadow) / 0.12);
+  box-shadow: var(--tw-inset-shadow, 0 0 #0000), var(--tw-inset-ring-shadow, 0 0 #0000), var(--tw-ring-offset-shadow, 0 0 #0000), var(--tw-ring-shadow, 0 0 #0000), var(--tw-shadow);
 }
 
 /* Markdown inside asset previews inherits the brand's fonts from the preview root. */

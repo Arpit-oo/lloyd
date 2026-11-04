@@ -50,6 +50,8 @@ export function campaignBlock(data: CampaignData, memories: MemoryForPrompt[]): 
         .map((r) => `--- ${r.kind === "image" ? "Image" : r.kind === "link" ? "Web page" : "Document"}: ${r.name} ---\n${r.text.slice(0, r.kind === "document" ? 12_000 : 6_000)}`)
         .join("\n\n")}`,
     );
+  if (data.assetTypes?.length)
+    parts.push(`Asset types the marketer picked for this campaign (plan only these, one or more of each as needed; add other types only if they ask later): ${data.assetTypes.map((x) => ASSET_LABEL[x]).join(", ")}`);
   if (data.voiceOverrides?.length)
     parts.push(
       `Exceptions the marketer explicitly confirmed after being warned (they override the brand's voice, tone and style rules and the audience constraints for the assets named; apply them fully and visibly; legal rules, forbidden claims, names and facts still apply, and the brand check must not flag these as problems):\n${data.voiceOverrides.map((o) => `- ${o}`).join("\n")}`,

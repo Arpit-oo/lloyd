@@ -37,6 +37,8 @@ export interface CallContext {
   models?: Partial<Record<Tier, string>>;
   /** Aborts in-flight model calls when the user presses Stop. */
   signal?: AbortSignal;
+  /** Live output of calls in this context (raw text so far), for token-by-token progress in the UI. */
+  onText?: (step: string, soFar: string) => void;
 }
 
 /** The model a call will use: the campaign's choice for that tier, else the default. */
@@ -207,13 +209,14 @@ async function execute<T>(
   try {
     req.ctx?.signal?.throwIfAborted();
     const res = await semaphore().run(async () => {
-      if (!req.onText) return client().responses.create(params, { signal: req.ctx?.signal });
+      const onText = req.onText ?? (req.ctx?.onText ? (s: string) => req.ctx!.onText!(req.step, s) : undefined);
+      if (!onText) return client().responses.create(params, { signal: req.ctx?.signal });
       // Streaming: same request, output delivered as it is generated; usage comes with the final response.
       const stream = client().responses.stream({ ...params, stream: true }, { signal: req.ctx?.signal });
       let soFar = "";
       stream.on("response.output_text.delta", (e) => {
         soFar += e.delta;
-        req.onText!(soFar);
+        onText(soFar);
       });
       return stream.finalResponse();
     });

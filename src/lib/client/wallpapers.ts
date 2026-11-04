@@ -77,6 +77,9 @@ const FLAME = ["   (  ", "  ) )  ", " ( ( ( ", "  ) ) )", " (,(,( "];
 
 const darkGlass = (accent: string, tint: string) => ({
   "--c-paper": "transparent",
+  // Soft accent and accent text follow the scene's accent (not the base style's).
+  "--c-accent-soft": `color-mix(in srgb, ${accent} 24%, ${tint})`,
+  "--c-accent-ink": `color-mix(in srgb, ${accent} 70%, #ffffff)`,
   "--c-sidebar": `color-mix(in srgb, ${tint} 72%, transparent)`,
   "--c-panel": `color-mix(in srgb, ${tint} 86%, transparent)`,
   "--c-surface": `color-mix(in srgb, ${tint} 88%, #ffffff 4%)`,
@@ -91,6 +94,8 @@ const darkGlass = (accent: string, tint: string) => ({
 
 const lightGlass = (accent: string, tint: string) => ({
   "--c-paper": "transparent",
+  "--c-accent-soft": `color-mix(in srgb, ${accent} 16%, #ffffff)`,
+  "--c-accent-ink": `color-mix(in srgb, ${accent} 75%, #000000)`,
   "--c-sidebar": `color-mix(in srgb, ${tint} 70%, transparent)`,
   "--c-panel": `color-mix(in srgb, ${tint} 85%, transparent)`,
   "--c-surface": "rgba(255,255,255,0.9)",

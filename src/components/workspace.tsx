@@ -21,8 +21,9 @@ import { Bee } from "./brand/bee";
 import { Sidebar } from "./sidebar";
 import { Wallpaper } from "./themes/wallpaper";
 import { ResizeHandle, useAssetWidth } from "./ui/resize-handle";
+import { QuickSwitch } from "./panels/quick-switch";
 
-type Panel = "brand" | "memory" | "inspector" | "settings" | "share" | null;
+type Panel = "brand" | "brand-switch" | "quick" | "memory" | "inspector" | "settings" | "share" | null;
 
 const STATE_LABEL: Record<string, string> = { new: "New", clarifying: "Questions", plan_review: "Plan ready", writing: "Writing", review: "Assets ready" };
 
@@ -160,15 +161,20 @@ export function Workspace() {
     if (!wide && !sheet) setSidebarOpen(false);
   }, [wide, sheet]);
 
-  const send = async (text: string, attachmentIds: string[] = []) => {
+  const send = async (text: string, attachmentIds: string[] = [], assetTypes: string[] = []) => {
     let id = activeId;
     if (!id) {
-      const c = await sendJSON<CampaignListItem>("/api/campaigns", "POST");
-      id = c.id;
+      try {
+        const c = await sendJSON<CampaignListItem>("/api/campaigns", "POST");
+        id = c.id;
+      } catch (e) {
+        setNotice(sendError(e));
+        return;
+      }
       setActiveId(id);
       activeRef.current = id;
       history.replaceState(null, "", `/?c=${id}`);
-      await loadView(id);
+      await loadView(id).catch(() => null);
     }
     // During review an asset event means an edit: show that asset. While writing, keep the first.
     const editing = view?.campaign.state === "review";
@@ -178,8 +184,9 @@ export function Workspace() {
     setOwnRun({ steps: [], startedAt: Date.now(), author, mine: true });
     setView((v) => (v ? { ...v, messages: [...v.messages, { id: `local-${Date.now()}`, role: "user", kind: "text", content: { text, attachments: [], ...(author ? { author } : {}) }, created_at: "" }] } : v));
     try {
-      await streamMessage(id, { text, attachmentIds, models, author }, (e) => {
-        if (e.type === "status") setOwnRun((r) => (r && r.steps.at(-1)?.text !== e.text ? { ...r, steps: [...r.steps, { text: e.text, at: Date.now() }] } : r));
+      await streamMessage(id, { text, attachmentIds, models, author, assetTypes }, (e) => {
+        if (e.type === "status") setOwnRun((r) => (r && r.steps.at(-1)?.text !== e.text ? { ...r, steps: [...r.steps, { text: e.text, at: Date.now() }], live: "" } : r));
+        if (e.type === "live") setOwnRun((r) => (r ? { ...r, live: e.text } : r));
         if (e.type === "draft") setDrafts((d) => ({ ...d, [e.assetId]: e.text }));
         if (e.type === "message" || e.type === "asset" || e.type === "state") loadView(id!);
         if (e.type === "message" && e.message.kind === "brand_check") loadCampaigns();
@@ -187,13 +194,15 @@ export function Workspace() {
           if (!sheet) showAssets();
           setSelectedAsset((s) => (editing ? e.assetId : s ?? e.assetId));
         }
-        if (e.type === "error") setNotice(e.text);
+        if (e.type === "error") setNotice(/^Request failed/.test(e.text) ? sendError(new Error(e.text)) : e.text);
       });
+    } catch (e) {
+      setNotice(sendError(e));
     } finally {
       setBusy(false);
       setOwnRun(null);
       setDrafts({});
-      await Promise.all([loadView(id), loadCampaigns()]);
+      await Promise.all([loadView(id), loadCampaigns()]).catch(() => null);
     }
   };
 
@@ -232,6 +241,9 @@ export function Workspace() {
         e.preventDefault();
         openCampaign(null);
         setTimeout(() => inputRef.current?.focus(), 50);
+      } else if (mod && e.key.toLowerCase() === "k") {
+        e.preventDefault();
+        setPanel((p) => (p === "quick" ? null : "quick"));
       } else if (mod && e.key === ",") {
         e.preventDefault();
         setPanel("settings");
@@ -267,12 +279,14 @@ export function Workspace() {
       onRename={rename}
       onDelete={remove}
       onClose={() => setSidebarOpen(false)}
-      brandName={brand.tokens?.brand_name ?? "brand"}
+      brandName={brand.name || brand.tokens?.brand_name || "brand"}
       onBrand={() => setPanel("brand")}
+      onAddBrand={() => setPanel("brand-switch")}
+      onQuickSwitch={() => setPanel("quick")}
       onMemory={() => setPanel("memory")}
       onInspector={() => setPanel("inspector")}
       inspectorEnabled={!!view}
-      themeName={scene?.name ?? { light: "Paper", dark: "Night", system: "System" }[appearance.mode]}
+      themeName={scene?.name ?? (appearance.style === "magi" ? { light: "Magi", dark: "Magi Dark", system: "Magi · System" } : { light: "Paper", dark: "Night", system: "System" })[appearance.mode]}
       onThemes={() => {
         setThemesOpen(true);
         if (mobile) setSidebarOpen(false);
@@ -373,6 +387,7 @@ export function Workspace() {
           aria-label="Assets"
         >
           <AssetPanel
+            key={view!.campaign.id}
             assets={view!.assets}
             drafts={liveDrafts}
             tokens={brand.tokens}
@@ -390,7 +405,20 @@ export function Workspace() {
         </aside>
       )}
 
-      {panel === "brand" && <BrandPanel brand={brand} onClose={() => setPanel(null)} onChanged={loadBrand} />}
+      {(panel === "brand" || panel === "brand-switch") && <BrandPanel key={panel} brand={brand} initialTab={panel === "brand-switch" ? "switch" : "authority"} onClose={() => setPanel(null)} onChanged={loadBrand} />}
+      {panel === "quick" && (
+        <QuickSwitch
+          campaigns={campaigns}
+          activeId={activeId}
+          onOpen={openCampaign}
+          onNew={() => {
+            openCampaign(null);
+            setTimeout(() => inputRef.current?.focus(), 50);
+          }}
+          onAddBrand={() => setPanel("brand-switch")}
+          onClose={() => setPanel(null)}
+        />
+      )}
       {panel === "memory" && <MemoryPanel onClose={() => setPanel(null)} />}
       {panel === "inspector" && view && <InspectorPanel view={view} onClose={() => setPanel(null)} />}
       {panel === "share" && view && (
@@ -417,4 +445,13 @@ function IconButton({ label, onClick, children }: { label: string; onClick: () =
       {children}
     </button>
   );
+}
+
+/** A send that failed before Lloyd could answer, in words the marketer can act on. */
+function sendError(e: unknown): string {
+  const m = (e as Error)?.message ?? "";
+  if (/409/.test(m)) return "Lloyd is still working on another message in this chat. Wait for it to finish, then send again.";
+  if (/Failed to fetch|NetworkError|load failed/i.test(m)) return "Can't reach the Lloyd server. Is it running (npm run dev)? Your message wasn't sent.";
+  if (/50\d/.test(m)) return "The server hit an error and your message wasn't sent. Try again; if it keeps happening, restart the server (npm run dev) and check logs/dev.txt.";
+  return `Your message wasn't sent: ${m || "unknown error"}.`;
 }

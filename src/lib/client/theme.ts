@@ -10,10 +10,13 @@ import { SCENES, type Scene } from "./wallpapers";
  * warm theme follows the mode. Both are stored in localStorage and applied on <html>.
  */
 export type ThemeChoice = "light" | "dark" | "system";
+/** Magi: the white, magenta-accented product look (default). Classic: the warm paper look. */
+export type StyleChoice = "magi" | "classic";
 
 export interface Appearance {
   mode: ThemeChoice;
   wallpaper: string | null;
+  style: StyleChoice;
 }
 
 const TOKEN_KEYS = new Set(SCENES.flatMap((s) => Object.keys(s.tokens)));
@@ -22,8 +25,9 @@ export function sceneById(id: string | null): Scene | null {
   return SCENES.find((s) => s.id === id) ?? null;
 }
 
-function apply({ mode, wallpaper }: Appearance) {
+function apply({ mode, wallpaper, style }: Appearance) {
   const root = document.documentElement;
+  root.classList.toggle("magi", style !== "classic");
   const scene = sceneById(wallpaper);
   TOKEN_KEYS.forEach((k) => root.style.removeProperty(k));
   root.classList.toggle("wall", !!scene);
@@ -37,8 +41,12 @@ function apply({ mode, wallpaper }: Appearance) {
 }
 
 function read(): Appearance {
-  if (typeof window === "undefined") return { mode: "system", wallpaper: null };
-  return { mode: (localStorage.getItem("theme") as ThemeChoice | null) ?? "system", wallpaper: localStorage.getItem("wallpaper") };
+  if (typeof window === "undefined") return { mode: "system", wallpaper: null, style: "magi" };
+  return {
+    mode: (localStorage.getItem("theme") as ThemeChoice | null) ?? "system",
+    wallpaper: localStorage.getItem("wallpaper"),
+    style: localStorage.getItem("style") === "classic" ? "classic" : "magi",
+  };
 }
 
 export function useAppearance() {
@@ -57,6 +65,7 @@ export function useAppearance() {
   /** Changes appearance with a circular reveal from `origin` (the click point) where supported. */
   const change = useCallback((next: Appearance, origin?: { x: number; y: number }) => {
     localStorage.setItem("theme", next.mode);
+    localStorage.setItem("style", next.style);
     if (next.wallpaper) localStorage.setItem("wallpaper", next.wallpaper);
     else localStorage.removeItem("wallpaper");
     const commit = () => {

@@ -1,0 +1,23 @@
+# docker compose up --build   ->   http://localhost:3000
+#
+# Needs a .env next to this file (OPENAI_API_KEY, FIRECRAWL_API_KEY; see .env.example).
+# BRAND_FOLDER points at the brand folder on your machine (default: the sample brand).
+services:
+  lloyd:
+    build: .
+    image: lloyd:latest
+    ports:
+      - "3000:3000"
+    env_file: .env
+    environment:
+      BRAND_DIR: /brand
+      DATA_DIR: /app/data
+    volumes:
+      - ${BRAND_FOLDER:-./wickhold-candidate-package/candidate}:/brand:ro
+      - lloyd-data:/app/data
+      - lloyd-logs:/app/logs
+    restart: unless-stopped
+
+volumes:
+  lloyd-data:
+  lloyd-logs:

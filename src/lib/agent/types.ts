@@ -124,6 +124,8 @@ export interface CampaignData {
   references?: { name: string; text: string; kind?: "document" | "image" | "link"; style?: StyleRequest }[];
   /** Design suggested by the latest image or link reference; new web assets and emails start from it. */
   referenceStyle?: StyleRequest;
+  /** Asset types picked with the chips when starting; the first plan uses only these. */
+  assetTypes?: import("./asset-types").AssetType[];
   /** An edit waiting for the marketer to confirm, because it goes against the brand (see confirm.ts). */
   pendingEdit?: import("./confirm").PendingEdit | null;
   /** Brand voice/style exceptions the marketer confirmed for this campaign. Legal rules are never overridden. */

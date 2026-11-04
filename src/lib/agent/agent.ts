@@ -20,7 +20,7 @@ import { proposePlan, revisePlan } from "./steps/planner";
 import { decideQuestions } from "./steps/questions";
 import { routeMessage } from "./steps/router";
 import { writeAsset, writerPrefix } from "./steps/writer";
-import { ASSET_SCHEMAS, type AssetContent } from "./asset-types";
+import { ASSET_LABEL, ASSET_SCHEMAS, ASSET_TYPES, type AssetContent, type AssetType } from "./asset-types";
 import type { CampaignData, PlanItem } from "./types";
 import { draftText } from "@/lib/text/partial-json";
 
@@ -36,6 +36,8 @@ export type AgentEvent =
   | { type: "asset"; assetId: string }
   /** Live text of an asset while it is being written (readable copy, not JSON). */
   | { type: "draft"; assetId: string; text: string }
+  /** What the current step is writing, token by token (readable text, not JSON). */
+  | { type: "live"; text: string }
   | { type: "state"; state: string }
   | { type: "done"; costUSD: number };
 
@@ -50,6 +52,8 @@ export interface MessageOptions {
   models?: ModelSettings;
   /** Display name of the person who sent it (shared chats show who said what). */
   author?: string;
+  /** Asset types picked with the chips under the message box; the first plan uses only these. */
+  assetTypes?: AssetType[];
 }
 
 export async function handleMessage(campaignId: string, text: string, emit: Emit, opts: MessageOptions = {}): Promise<void> {
@@ -58,8 +62,9 @@ export async function handleMessage(campaignId: string, text: string, emit: Emit
   if (!campaign) throw new Error(`Campaign ${campaignId} not found`);
   if (opts.models) store.updateCampaign(campaignId, { data: { models: opts.models } });
   const runId = newId("run");
-  const ctx: CallContext = { runId, campaignId, signal: opts.signal, models: resolveModels(opts.models ?? campaign.data.models) };
+  const ctx: CallContext = { runId, campaignId, signal: opts.signal, models: resolveModels(opts.models ?? campaign.data.models), onText: liveText(emit) };
   const t = new Turn(campaignId, ctx, emit);
+  if (opts.assetTypes?.length) store.updateCampaign(campaignId, { data: { assetTypes: opts.assetTypes.filter((x) => (ASSET_TYPES as readonly string[]).includes(x)) } });
 
   const files = getAttachments(opts.attachmentIds ?? []);
   if (files.length) linkAttachments(files.map((f) => f.id), campaignId);
@@ -88,6 +93,13 @@ export async function handleMessage(campaignId: string, text: string, emit: Emit
     if (campaign.state === "new") {
       // An attached document can be the brief, or add to a typed one.
       const brief = [text, renderAttachments(docs)].filter((s) => s.trim()).join("\n\n");
+      if (!docs.length && !refs.length && isSmallTalk(text)) {
+        // "hi", "thanks", "what can you do?": not a brief, so don't run the brief pipeline on it.
+        t.reply(
+          `Hi${opts.author ? ` ${opts.author}` : ""}! I write on-brand campaign assets for ${brand.tokens?.brand_name || "your brand"}: LinkedIn and X posts, blog posts, landing pages and emails, checked against the brand's rules.\n\nTo start, paste or attach a brief (PDF, Word, PowerPoint, Markdown), or tell me what you're launching, for whom, and which assets you need. You can also pick a sample brief below.`,
+        );
+        return;
+      }
       if (!brief.trim()) {
         // Only images: keep them as references and ask for the brief itself.
         t.reply("Got your reference. Now tell me about the campaign: paste or attach the brief, or describe what you're launching, for whom, and which assets you need.");
@@ -171,6 +183,13 @@ function settleAfterStop(campaignId: string) {
   if (c.state === "writing") store.updateCampaign(campaignId, { state: assets.length ? "review" : "plan_review" });
 }
 
+/** A greeting, thanks or "what can you do" on its own: short and nothing like a brief. */
+export function isSmallTalk(text: string): boolean {
+  const t = text.trim().toLowerCase().replace(/[!?.,:;)(*~\s]+$/g, "");
+  if (!t || t.split(/\s+/).length > 6) return false;
+  return /^(hi+|hey+|hello+|yo+|hiya|howdy|sup|gm|good (morning|afternoon|evening)|thanks?|thank you|ty|ok(ay)?|cool|test(ing)?|ping|help|what can you do|who are you|what are you|how does this work|how do i (start|use this))(\s+(there|lloyd|team|all|everyone|again|mate|buddy))?$/.test(t);
+}
+
 // ---------- flows ----------
 
 async function startFromBrief(brand: Brand, t: Turn, briefText: string) {
@@ -206,7 +225,11 @@ async function planFromAnswers(brand: Brand, t: Turn, answers: string) {
 
 async function plan(brand: Brand, t: Turn) {
   t.status("Planning the assets");
-  const p = await proposePlan(brand, t.data(), memoriesForPrompt(brand.hash), t.ctx);
+  const proposed = await proposePlan(brand, t.data(), memoriesForPrompt(brand.hash), t.ctx);
+  // Asset types the marketer picked are binding for the first plan (later chat changes can add others).
+  const types = t.data().assetTypes;
+  const kept = types?.length ? proposed.items.filter((i) => types.includes(i.type)) : proposed.items;
+  const p = kept.length && kept.length < proposed.items.length ? { ...proposed, items: kept, mix_rationale: `${proposed.mix_rationale} Limited to the asset types you picked: ${types!.map((x) => ASSET_LABEL[x]).join(", ")}.` } : proposed;
   store.updateCampaign(t.campaignId, { data: { plan: p } });
   t.say("assistant", "plan", { plan: p });
   t.setState("plan_review");
@@ -494,7 +517,7 @@ export async function applyFreeform(
   const current = asset && store.getVersion(assetId, asset.current_version);
   if (!campaign || !asset || !current) throw new Error("Asset not found");
   const runId = newId("run");
-  const ctx: CallContext = { runId, campaignId, assetId, signal, models: resolveModels(campaign.data.models) };
+  const ctx: CallContext = { runId, campaignId, assetId, signal, models: resolveModels(campaign.data.models), onText: liveText(emit) };
   const t = new Turn(campaignId, ctx, emit);
   const instruction = opts.reset ? "Back to the brand template" : `Free-form design: ${opts.direction}`;
   t.say("user", "text", { text: opts.reset ? `Put ${asset.title} back on the brand template.` : `Free-form design for ${asset.title}: ${opts.direction}`, attachments: [], ...(opts.author ? { author: opts.author } : {}) });
@@ -556,4 +579,22 @@ function confirmIntent(text: string): "yes" | "no" | "partial" | null {
   if (/^(yes|yeah|yep|yup|sure|ok|okay|go ahead|do it|y|confirm|proceed)\b/.test(t) && t.length < 60) return "yes";
   if (/^(no|nope|nah|cancel|stop|don'?t|leave it|n)\b/.test(t) && t.length < 60) return "no";
   return null;
+}
+
+/**
+ * Streams what the sequential steps write (brief reading, brand check, questions, plan, routing,
+ * edits) as readable text. Parallel writers and checks are left out: assets have their own live
+ * drafts, and several checks at once would only flicker. For routing, only the reply is shown.
+ */
+const LIVE_STEPS = /^(intake|brand-check|questions|plan|plan:revise|route|edit:|memory)/;
+function liveText(emit: Emit): (step: string, soFar: string) => void {
+  let last = 0;
+  return (step, soFar) => {
+    if (!LIVE_STEPS.test(step) || step.startsWith("edit:request")) return;
+    const now = Date.now();
+    if (now - last < 120) return;
+    last = now;
+    const text = step === "route" ? (/"reply"\s*:\s*"((?:[^"\\]|\\.)*)/.exec(soFar)?.[1] ?? "").replace(/\\n/g, "\n").replace(/\\"/g, '"') : draftText(soFar);
+    if (text.trim()) emit({ type: "live", text: text.length > 1500 ? `…${text.slice(-1500)}` : text });
+  };
 }

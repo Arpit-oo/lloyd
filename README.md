@@ -4,10 +4,14 @@ A local chat app where a marketer and an AI agent plan and write a campaign for 
 
 Chat on the left, assets on the right: LinkedIn and X posts, emails, blog posts and landing pages, rendered the way they'd look when published, in the brand's own colors and fonts. Every model call is logged with its exact prompt, tokens, cache hits and cost.
 
-- Full user guide (what it does, chat editing, how to test): [GUIDE.md](GUIDE.md)
+- In plain words (what it does, how to use it, brief checklist): [docs/IN-PLAIN-WORDS.md](docs/IN-PLAIN-WORDS.md)
+- Every feature and how to test it: [docs/GUIDE.md](docs/GUIDE.md)
+- Messy test briefs with an answer key: [fixtures/test-briefs/](fixtures/test-briefs/README.md)
+- How it is built, every prompt and the JSON passed: [docs/EXPLANATION.md](docs/EXPLANATION.md)
+- Architecture diagrams (system, ingest, state machine, edits, caching, data model, shared chats): [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
 - How it works and why: [DECISIONS.md](DECISIONS.md)
 - What it costs: [COSTS.md](COSTS.md)
-- Build log, including where AI tools led me wrong: [NOTES.md](NOTES.md)
+- Build log, including where AI tools led me wrong: [docs/NOTES.md](docs/NOTES.md)
 
 ## Run it
 
@@ -20,6 +24,17 @@ npm run dev                 # http://localhost:3000
 ```
 
 Put the brand folder at `./wickhold-candidate-package/candidate` (the default), or point `BRAND_DIR` in `.env` at any other brand folder.
+
+### Or with Docker
+
+```bash
+cp .env.example .env        # add the keys
+docker compose up --build   # http://localhost:3000
+```
+
+The brand folder is mounted read-only (default `./wickhold-candidate-package/candidate`; set `BRAND_FOLDER=/path/to/brand` to use another). Campaigns and logs live in the `lloyd-data` and `lloyd-logs` volumes, and the image contains no keys or brand content. The CLI scripts work inside the container too, for example `docker compose run --rm lloyd npm run ingest`.
+
+**Switching brand.** Brand panel → **Switch brand**: pick a brand used before, the bundled mini test brand (`fixtures/mini-brand`), or type any folder path. The choice is saved in `data/brands.json`, so it survives restarts and wins over `BRAND_DIR`. Campaigns and memory are kept per brand. A brand switch waits until no run is in progress.
 
 **First run on a brand.** If the brand folder matches a shipped seed (the sample brand does), the index loads instantly from `seed/brands/`. For any other brand folder, the app opens an indexing screen first. Indexing takes a few minutes and costs roughly $1–3 for a 100k-token folder, once. It is cached by a hash of the folder's contents, so changing any file triggers a fresh index.
 
@@ -61,6 +76,7 @@ While Lloyd works, the chat shows the current step with a running clock; "N step
 | `npm run bench` | Same runs, then writes `COSTS.md` |
 | `npm run seed` | Pack the current brand index into `seed/` |
 | `npm run test:keys` | Smoke-test the API keys, models, caching, Firecrawl and vision |
+| `npm run export -- --data <dir> --out <dir>` | Write every campaign in a data directory as Markdown (same as Share → Export), e.g. test runs in `data/mock2` |
 | `npm test` | Unit tests |
 
 ## Where things are
@@ -71,15 +87,24 @@ src/lib/brand/    ingest: scan, chunk, doc cards, governance, facts, conflicts, 
 src/lib/agent/    state machine + steps: intake, brand check, questions, plan, write, guard, edit, research, router
 src/lib/memory/   memory store and end-of-campaign extraction
 src/components/   chat, asset renderers, inspector and panels
+src/app/api/      route handlers (campaigns, messages over SSE, pulse, export, share, assets, brand, memories, uploads)
+scripts/          ingest, brief, eval / bench, seed, test-keys
 evals/            per-brief expectations (test data only; the app never reads them)
-fixtures/mini-brand/  a tiny second brand with no governance doc, used to check nothing is brand-specific
+fixtures/mini-brand/   a tiny second brand with no governance doc, used to check nothing is brand-specific
+fixtures/mock-briefs/  test briefs as .md and .pdf: vague, full of traps, built from a reference link (shown as "Test" on the start screen)
+fixtures/mock-results/ what Lloyd produced for each test brief, as readable Markdown
+fixtures/test-briefs/  five messy briefs (Slack paste, email chain, breach newsjack, .txt one-liner, stale names) with an answer key
+DECISIONS.md, COSTS.md   design decisions; tokens, cost and cache hit rate per brief
+docs/             guide, architecture, build notes, original plan, recording script
+seed/             the sample brand's index, so a fresh clone starts instantly
+Dockerfile, docker-compose.yml
 ```
 
 Logs: `logs/calls.jsonl` (every call, with full request and response) and the `llm_calls` table in `data/app.db`.
 
 ## Models
 
-All OpenAI, chosen per task (`src/lib/llm/models.ts`, override with `MODEL_*` env vars). Reasons are in DECISIONS.md.
+All OpenAI, chosen per task (`src/lib/llm/models.ts`, override with `MODEL_*` env vars). Reasons are in [DECISIONS.md](DECISIONS.md).
 
 | Tier | Default | Used for |
 |---|---|---|

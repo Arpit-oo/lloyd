@@ -20,6 +20,11 @@ export interface Brand {
 
 const g = globalThis as unknown as { __brandHash?: string };
 
+/** After switching brand: the next call rescans the (new) brand folder. */
+export function resetBrandCache() {
+  g.__brandHash = undefined;
+}
+
 export function currentBrandHash(): string {
   g.__brandHash ??= scanBrand(getConfig().brandDir).hash;
   return g.__brandHash;

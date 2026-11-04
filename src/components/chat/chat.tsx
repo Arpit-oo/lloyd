@@ -10,7 +10,7 @@ import { ThemePicker } from "../themes/theme-picker";
 import { Bee } from "../brand/bee";
 import { Composer } from "./composer";
 import { MessageCard } from "./message-cards";
-import { RunSteps, type LiveRun } from "./run-steps";
+import { RunLog, RunSteps, type LiveRun } from "./run-steps";
 
 const PLACEHOLDER: Record<string, string> = {
   new: "Paste a brief, attach a brief file, or describe the campaign…",
@@ -24,6 +24,8 @@ interface SampleBrief {
   file: string;
   title: string;
   text: string;
+  /** A repo test brief (vague, trap, reference) rather than one shipped with the brand. */
+  mock?: boolean;
 }
 
 /** The conversation: a centered column, plain assistant replies, and the composer. */
@@ -34,7 +36,7 @@ export function Chat({ view, busy, run, notice, onSend, onStop, onOpenAsset, mod
   run: LiveRun | null;
   /** A one-off problem to show above the message box, e.g. someone else's turn. */
   notice: string | null;
-  onSend: (text: string, attachmentIds?: string[]) => void;
+  onSend: (text: string, attachmentIds?: string[], assetTypes?: string[]) => void;
   onStop: () => void;
   onOpenAsset: (id: string, tab?: "changes") => void;
   models: ModelSettings;
@@ -58,15 +60,15 @@ export function Chat({ view, busy, run, notice, onSend, onStop, onOpenAsset, mod
   // Follow new content only if the reader is already at the bottom; never yank them down.
   useEffect(() => {
     if (atBottom) scrollToBottom();
-  }, [messages.length, run?.steps.length, atBottom, scrollToBottom]);
+  }, [messages.length, run?.steps.length, run?.live, atBottom, scrollToBottom]);
 
   useEffect(() => {
     scrollToBottom(false);
   }, [view?.campaign.id, scrollToBottom]);
 
-  const send = (text: string, ids: string[]) => {
+  const send = (text: string, ids: string[], types?: string[]) => {
     setAtBottom(true);
-    onSend(text, ids);
+    onSend(text, ids, types);
   };
 
   const composer = (large: boolean) => (
@@ -99,12 +101,12 @@ export function Chat({ view, busy, run, notice, onSend, onStop, onOpenAsset, mod
     </>
   );
 
-  if (!messages.length && !busy) return <Welcome composer={composer(true)} name={prefs.name} showMascot={prefs.showMascot} onPick={(b) => { setDraft(b.text); inputRef.current?.focus(); }} />;
+  if (!messages.length && !busy) return <Welcome composer={composer(true)} name={prefs.name} showMascot={prefs.showMascot} magi={themes.appearance.style === "magi"} onPick={(b) => { setDraft(b.text); inputRef.current?.focus(); }} />;
 
   const lastInteractive = [...messages].reverse().find((m) => m.role === "assistant" && (m.kind === "questions" || m.kind === "plan"))?.id;
   const lastMessage = messages[messages.length - 1];
   const lastUser = [...messages].reverse().find((m) => m.role === "user");
-  const stalled = !busy && state === "new" && messages.some((m) => m.role === "assistant");
+  const stalled = !busy && state === "new" && messages.some((m) => m.role === "assistant" && m.kind !== "text");
 
   return (
     <div className="relative flex min-h-0 flex-1 flex-col">
@@ -124,6 +126,7 @@ export function Chat({ view, busy, run, notice, onSend, onStop, onOpenAsset, mod
             return (
               <div key={m.id} className={i >= messages.length - 2 ? "settle" : undefined}>
                 <MessageCard m={m} me={prefs.name} live={!busy && (m.kind === "confirm" ? m.id === lastMessage?.id : m.id === lastInteractive && (state === "clarifying" || state === "plan_review"))} onReply={(t) => send(t, [])} onOpenAsset={onOpenAsset} estimate={view?.estimate ?? null} />
+                {(m.content as { runLog?: Parameters<typeof RunLog>[0]["log"] }).runLog && <RunLog log={(m.content as { runLog: Parameters<typeof RunLog>[0]["log"] }).runLog} />}
                 <MessageFooter
                   text={m.role === "assistant" && m.kind === "text" ? String((m.content as { text?: string }).text ?? "") : null}
                   cost={isLastOfRun ? turnCost[runId!] : undefined}
@@ -196,7 +199,7 @@ function greeting(name: string) {
   return name.trim() ? `${part}, ${name.trim()}` : part;
 }
 
-function Welcome({ composer, onPick, name, showMascot }: { composer: React.ReactNode; onPick: (b: SampleBrief) => void; name: string; showMascot: boolean }) {
+function Welcome({ composer, onPick, name, showMascot, magi }: { composer: React.ReactNode; onPick: (b: SampleBrief) => void; name: string; showMascot: boolean; magi: boolean }) {
   const [briefs, setBriefs] = useState<SampleBrief[]>([]);
   useEffect(() => {
     getJSON<SampleBrief[]>("/api/briefs").then(setBriefs).catch(() => setBriefs([]));
@@ -204,8 +207,18 @@ function Welcome({ composer, onPick, name, showMascot }: { composer: React.React
   return (
     <div className="flex flex-1 flex-col items-center justify-center overflow-y-auto px-4 pb-16 sm:px-6">
       {showMascot && <Bee size={64} mood="hover" className="mb-4" />}
-      <p className="mb-1 text-center text-[15px] text-muted">{greeting(name)}</p>
-      <h1 className="mb-7 text-balance text-center font-serif text-[30px] leading-tight text-ink sm:text-[36px]">What are we launching?</h1>
+      {magi ? (
+        <h1 className="mb-8 text-balance text-center text-[30px] font-medium leading-[1.2] tracking-[-0.02em] text-ink sm:text-[36px]">
+          {name.trim() ? `Hey there, ${name.trim()}.` : "Hey there."}
+          <br />
+          What are we launching?
+        </h1>
+      ) : (
+        <>
+          <p className="mb-1 text-center text-[15px] text-muted">{greeting(name)}</p>
+          <h1 className="mb-7 text-balance text-center font-serif text-[30px] leading-tight text-ink sm:text-[36px]">What are we launching?</h1>
+        </>
+      )}
       <div className="w-full max-w-[700px]">
         {composer}
         {briefs.length > 0 && (
@@ -213,8 +226,9 @@ function Welcome({ composer, onPick, name, showMascot }: { composer: React.React
             <div className="mb-2 text-center text-[12px] text-muted">Or start from a sample brief (loads it into the box so you can read it first)</div>
             <div className="flex flex-wrap justify-center gap-2">
               {briefs.map((b) => (
-                <button key={b.file} onClick={() => onPick(b)} className="flex max-w-[320px] items-center gap-1.5 rounded-full border border-line bg-surface px-3 py-1.5 text-[13px] text-ink/85 hover:border-line-strong hover:text-ink">
+                <button key={b.file} onClick={() => onPick(b)} title={b.mock ? "Test brief from the repo (fixtures/mock-briefs)" : undefined} className="flex max-w-[320px] items-center gap-1.5 rounded-full border border-line bg-surface px-3 py-1.5 text-[13px] text-ink/85 hover:border-line-strong hover:text-ink">
                   <FileText size={14} className="shrink-0 text-muted" />
+                  {b.mock && <span className="shrink-0 rounded bg-accent-soft px-1.5 text-[11px] font-semibold text-accent-ink">Test</span>}
                   <span className="truncate">{b.title}</span>
                 </button>
               ))}

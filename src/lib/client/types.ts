@@ -42,6 +42,7 @@ export interface CampaignListItem {
 export interface BrandView {
   ready: boolean;
   hash?: string;
+  name?: string;
   summary?: IngestSummary;
   governance?: Governance;
   docs?: { id: string; title: string; tier: number; reason: string; card: { doc_type: string; summary: string; status: string } }[];

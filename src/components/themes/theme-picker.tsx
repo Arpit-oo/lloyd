@@ -1,6 +1,6 @@
 "use client";
 
-import { Check, Monitor, Moon, Sun } from "lucide-react";
+import { Check, Moon, Sparkles, Sun } from "lucide-react";
 import { useEffect, useRef } from "react";
 import type { Appearance } from "@/lib/client/theme";
 import { SCENES } from "@/lib/client/wallpapers";
@@ -10,10 +10,11 @@ import { Wallpaper } from "./wallpaper";
  * The /theme strip above the composer: plain themes and live animated wallpapers.
  * Keyboard: ←/→ move, Enter applies, Esc closes. Clicking applies with a reveal from the click.
  */
-const PLAIN: { id: Appearance["mode"]; name: string; icon: typeof Sun; swatch: string }[] = [
-  { id: "light", name: "Paper", icon: Sun, swatch: "linear-gradient(135deg,#faf9f6,#ebe6dc)" },
-  { id: "dark", name: "Night", icon: Moon, swatch: "linear-gradient(135deg,#30302e,#1f1e1c)" },
-  { id: "system", name: "System", icon: Monitor, swatch: "linear-gradient(135deg,#faf9f6 50%,#262624 50%)" },
+const PLAIN: { id: string; mode: Appearance["mode"]; style: Appearance["style"]; name: string; icon: typeof Sun; swatch: string; iconColor: string }[] = [
+  { id: "magi", mode: "light", style: "magi", name: "Magi", icon: Sparkles, swatch: "linear-gradient(135deg,#ffffff 55%,#fceaf9)", iconColor: "#d936c4" },
+  { id: "magi-dark", mode: "dark", style: "magi", name: "Magi Dark", icon: Sparkles, swatch: "linear-gradient(135deg,#1b1b20 55%,#3a1435)", iconColor: "#f06be0" },
+  { id: "paper", mode: "light", style: "classic", name: "Paper", icon: Sun, swatch: "linear-gradient(135deg,#faf9f6,#ebe6dc)", iconColor: "#615d55" },
+  { id: "night", mode: "dark", style: "classic", name: "Night", icon: Moon, swatch: "linear-gradient(135deg,#30302e,#1f1e1c)", iconColor: "#d8d4cc" },
 ];
 
 export function ThemePicker({ appearance, onChange, onClose }: {
@@ -52,11 +53,11 @@ export function ThemePicker({ appearance, onChange, onClose }: {
       </div>
       <div ref={strip} role="radiogroup" aria-label="Theme" onKeyDown={move} className="flex gap-2.5 overflow-x-auto pb-1">
         {PLAIN.map((p) => {
-          const active = !appearance.wallpaper && appearance.mode === p.id;
+          const active = !appearance.wallpaper && appearance.mode === p.mode && appearance.style === p.style;
           return (
-            <Tile key={p.id} name={p.name} active={active} onPick={(e) => onChange({ mode: p.id, wallpaper: null }, origin(e))}>
+            <Tile key={p.id} name={p.name} active={active} onPick={(e) => onChange({ mode: p.mode, style: p.style, wallpaper: null }, origin(e))}>
               <div className="flex h-full w-full items-center justify-center" style={{ background: p.swatch }}>
-                <p.icon size={18} className={p.id === "light" ? "text-[#615d55]" : "text-[#d8d4cc]"} />
+                <p.icon size={18} style={{ color: p.iconColor }} />
               </div>
             </Tile>
           );

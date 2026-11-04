@@ -32,7 +32,7 @@ export interface BrandScan {
 }
 
 const DOC_EXT = new Set([".md", ".markdown", ".txt", ".html", ".htm"]);
-const BINARY_DOC_EXT = new Set([".pdf", ".docx"]);
+const BINARY_DOC_EXT = new Set([".pdf", ".docx", ".pptx"]);
 const IMG_EXT = new Set([".jpg", ".jpeg", ".png", ".webp", ".gif"]);
 const IGNORED_DIRS = new Set(["briefs", "node_modules", ".git"]);
 

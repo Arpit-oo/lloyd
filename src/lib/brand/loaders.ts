@@ -1,5 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
+import JSZip from "jszip";
 import mammoth from "mammoth";
 import { extractText, getDocumentProxy } from "unpdf";
 import type { ScannedDoc } from "./scan";
@@ -53,6 +54,7 @@ export async function extractBuffer(name: string, buf: Buffer): Promise<string> 
     const { value } = await mammoth.convertToHtml({ buffer: buf });
     return htmlToMarkdownish(value);
   }
+  if (ext === ".pptx") return pptxToText(base, buf);
   if (ext === ".html" || ext === ".htm") return htmlToMarkdownish(buf.toString("utf8"));
   if (TEXT_EXT.has(ext)) return buf.toString("utf8");
   throw new Error(`unsupported file type ${ext || "(none)"}`);
@@ -75,4 +77,27 @@ export function htmlToMarkdownish(html: string): string {
     .replace(/&#39;/g, "'")
     .replace(/\n{3,}/g, "\n\n")
     .trim();
+}
+
+/** Slide text from a .pptx (each slide's text runs, then its speaker notes), in slide order. */
+async function pptxToText(title: string, buf: Buffer): Promise<string> {
+  const zip = await JSZip.loadAsync(buf);
+  const num = (n: string) => Number(/(\d+)\.xml$/.exec(n)?.[1] ?? 0);
+  const runs = (xml: string) =>
+    [...xml.matchAll(/<a:p>([\s\S]*?)<\/a:p>/g)]
+      .map((p) => [...p[1].matchAll(/<a:t>([^<]*)<\/a:t>/g)].map((t) => t[1]).join(""))
+      .map((l) => l.replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"').replace(/&apos;/g, "'").trim())
+      .filter(Boolean);
+  const slides = Object.keys(zip.files).filter((n) => /^ppt\/slides\/slide\d+\.xml$/.test(n)).sort((a, b) => num(a) - num(b));
+  const parts: string[] = [];
+  for (const name of slides) {
+    const n = num(name);
+    const lines = runs(await zip.file(name)!.async("string"));
+    const notesFile = zip.file(`ppt/notesSlides/notesSlide${n}.xml`);
+    const notes = notesFile ? runs(await notesFile.async("string")).filter((l) => !/^\d+$/.test(l)) : [];
+    const heading = `## Slide ${n}${lines[0] ? `: ${lines[0]}` : ""}`;
+    const speaker = notes.length ? `Speaker notes: ${notes.join(" ")}` : "";
+    parts.push([heading, lines.slice(1).join("\n"), speaker].filter(Boolean).join("\n\n"));
+  }
+  return `# ${title}\n\n${parts.join("\n\n")}`;
 }
