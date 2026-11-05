@@ -62,8 +62,8 @@ The hard problem it solves: the brand folder is ~145k tokens across 84 documents
 
 ```
 src/app/                 pages and API routes (Next.js App Router)
-  page.tsx               the app
-  lloyd/                 the landing page
+  page.tsx               the landing page (/)
+  app/page.tsx           the app (/app)
   api/                   campaigns, messages (SSE), assets, brand, brands, memories, calls, share, uploads
 src/lib/brand/           brand layer: scan, chunk, cards, governance, facts, conflicts, entities, kernel, images, retrieve
 src/lib/agent/           agent: state machine, prompt context, store, asset types, design settings, references
@@ -71,7 +71,7 @@ src/lib/agent/steps/     one file per model step: intake, brand-check, questions
                          request-check, guard, router, images, research, freeform
 src/lib/llm/             client (the only door to OpenAI), models per tier, pricing, embeddings, concurrency
 src/lib/memory/          memory store and end-of-campaign extraction
-src/components/          chat, asset renderers, panels (brand, memory, inspector, settings, share), themes
+src/components/          chat, asset renderers, panels (brand, memory, inspector, settings, share), themes, landing
 scripts/                 ingest, brief (terminal run), eval/bench, seed, key test
 evals/  fixtures/        expected behaviour per brief; mock briefs, messy test briefs, a second brand
 ```
@@ -510,9 +510,9 @@ The model is good at judgment and bad at guarantees. These are guaranteed by cod
 - **Themes:** all colours are CSS variables (`--c-paper`, `--c-ink`, `--c-accent`, …) in `src/app/globals.css`. **Magi** (default: white, magenta `#d936c4`, Inter) and **Magi Dark**; **Classic** Paper and Night (warm, serif headings); plus 8 animated wallpapers. Fonts: Plus Jakarta Sans (app), Inter (Magi), Source Serif 4 (headings in Classic), JetBrains Mono (code).
 - **Accessibility:** every control has a name, visible focus rings (including text fields), contrast checked in all themes, reduced-motion respected, keyboard shortcuts (`Ctrl+K`, `Ctrl+Shift+O`, `Ctrl+B`, `/`, `Esc`).
 
-### The landing page (`/lloyd`)
+### The landing page (`/`)
 
-Magi-style: white page, magenta accent, Inter. Sticky nav (with a phone menu), a hero with a drawn app window, a halftone ribbon, cost cards with real numbers from COSTS.md, the brand layer explained, sample assets in tabs, a feature grid with isometric tiles, six steps, audiences, a cost table and a dark closing section. All artwork is drawn in code (`src/app/lloyd/art.tsx`); no external images.
+Magi-style: white page, magenta accent, Inter. Sticky nav (with a phone menu), a hero with a drawn app window, a halftone ribbon, cost cards with real numbers from COSTS.md, the brand layer explained, sample assets in tabs, a feature grid with isometric tiles, six steps, audiences, a cost table and a dark closing section. All artwork is drawn in code (`src/components/landing/art.tsx`); no external images.
 
 ---
 

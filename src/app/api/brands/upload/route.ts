@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { activeRunCount } from "@/lib/agent/runs";
-import { rememberBrand, uploadedBrandsDir } from "@/lib/brand/active";
+import { brandNameTaken, rememberBrand, uploadedBrandsDir } from "@/lib/brand/active";
 import { getConfig } from "@/lib/config";
 import { json } from "@/lib/http/sse";
 
@@ -20,6 +20,10 @@ export async function POST(req: Request) {
   const files = form.getAll("files").filter((f): f is File => f instanceof File);
   const paths = form.getAll("paths").map(String);
   if (!files.length) return json({ error: "Choose the brand's folder (or its files) first." }, 400);
+  if (!name) return json({ error: "Give the brand a name." }, 400);
+  // Brand names are unique, so the brand menu never shows two brands that look the same.
+  const clash = brandNameTaken(getConfig().dataDir, name);
+  if (clash) return json({ error: `There is already a brand called "${clash}". Pick another name, or switch to that brand instead.` }, 409);
 
   const slug = (name || "brand").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 48) || "brand";
   const root = uploadedBrandsDir(getConfig().dataDir);

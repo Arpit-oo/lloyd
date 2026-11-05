@@ -41,7 +41,7 @@ export function CallView({ id }: { id: string }) {
         ))}
       </div>
       <details className="rounded-lg border border-line bg-surface">
-        <summary className="cursor-pointer px-3 py-2 text-xs font-semibold">Request parameters (model, schema, cache options)</summary>
+        <summary className="cursor-(--cursor-hand) px-3 py-2 text-xs font-semibold">Request parameters (model, schema, cache options)</summary>
         <pre className="max-h-80 overflow-auto p-3 font-mono text-[11px]">
           {JSON.stringify({ ...call.request, input: `[${call.request.input?.length ?? 0} messages shown above]`, _labels: undefined }, null, 2)}
         </pre>

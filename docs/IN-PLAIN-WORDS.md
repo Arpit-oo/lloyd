@@ -25,7 +25,7 @@ Each one appears on the right, looking like the real thing: a LinkedIn post look
 1. Open a terminal in the project folder.
 2. Run `npm install` (first time only).
 3. Run `npm run dev`.
-4. Open http://localhost:3000.
+4. Open http://localhost:3000 for the landing page, or http://localhost:3000/app for the app.
 
 The API keys go in `.env` (see `.env.example`). Docker also works: `docker compose up`.
 

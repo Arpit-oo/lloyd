@@ -20,6 +20,7 @@ Never ask about things the brand documents already settle (voice, approved wordi
 A detailed brief usually needs zero questions. A vague brief usually needs two or three.
 Exception that always needs a question: when the brand check removed or changed the brief's centerpiece or lead (verdict conflict / needs_change on a strategy, headline claim or hero story), the marketer must choose the new lead. Ask it, with the strongest evidence-backed alternative as the default.
 Maximum three questions. Each needs 2-4 short options and a sensible default.
+Set multi_select when the options can be combined (channels, asset types, audiences); then the options must not overlap, and the default is the single most useful pick.
 List the assumptions you made instead of asking, so the marketer can correct them.`;
 
 export async function decideQuestions(brand: Brand, data: CampaignData, memories: MemoryForPrompt[], ctx: CallContext): Promise<Questions> {

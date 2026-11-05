@@ -20,7 +20,7 @@ Requires **Node 22+** (see `.nvmrc`).
 ```bash
 cp .env.example .env        # add OPENAI_API_KEY and FIRECRAWL_API_KEY
 npm install
-npm run dev                 # http://localhost:3000
+npm run dev                 # http://localhost:3000 (landing page) → the app is at /app
 ```
 
 Put the brand folder at `./wickhold-candidate-package/candidate` (the default), or point `BRAND_DIR` in `.env` at any other brand folder.
@@ -29,7 +29,7 @@ Put the brand folder at `./wickhold-candidate-package/candidate` (the default), 
 
 ```bash
 cp .env.example .env        # add the keys
-docker compose up --build   # http://localhost:3000
+docker compose up --build   # http://localhost:3000/app
 ```
 
 The brand folder is mounted read-only (default `./wickhold-candidate-package/candidate`; set `BRAND_FOLDER=/path/to/brand` to use another). Campaigns and logs live in the `lloyd-data` and `lloyd-logs` volumes, and the image contains no keys or brand content. The CLI scripts work inside the container too, for example `docker compose run --rm lloyd npm run ingest`.

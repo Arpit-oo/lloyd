@@ -17,14 +17,22 @@ export function Modal({ title, subtitle, onClose, children, size = "full" }: {
 }) {
   const titleId = useId();
   const box = useRef<HTMLDivElement>(null);
+  // Parents pass a new onClose on every render (e.g. each campaign poll). Keep it in a ref so the
+  // effect below runs once per open: re-running it moved focus to the Close button mid-typing, and
+  // the next Space "clicked" it.
+  const close = useRef(onClose);
+  useEffect(() => {
+    close.current = onClose;
+  }, [onClose]);
 
   useEffect(() => {
     const opener = document.activeElement as HTMLElement | null;
-    box.current?.querySelector<HTMLElement>("[data-autofocus]")?.focus();
+    // Focus the Close button only if nothing inside (e.g. an autoFocus field) already has focus.
+    if (!box.current?.contains(document.activeElement)) box.current?.querySelector<HTMLElement>("[data-autofocus]")?.focus();
     const focusables = () =>
       [...(box.current?.querySelectorAll<HTMLElement>('a[href],button:not([disabled]),input,select,textarea,[tabindex]:not([tabindex="-1"])') ?? [])].filter((el) => el.offsetParent !== null);
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") return onClose();
+      if (e.key === "Escape") return close.current();
       if (e.key !== "Tab") return;
       const els = focusables();
       if (!els.length) return;
@@ -43,7 +51,7 @@ export function Modal({ title, subtitle, onClose, children, size = "full" }: {
       window.removeEventListener("keydown", onKey);
       opener?.focus?.();
     };
-  }, [onClose]);
+  }, []);
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 p-3 sm:p-4" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>

@@ -6,7 +6,7 @@ import { ASSET_LABEL, assetToText, FREEFORM_TYPES, type AssetContent } from "@/l
 import { diffWords } from "@/lib/text/diff";
 import type { GuardReport } from "@/lib/agent/steps/guard";
 import type { ResearchFinding } from "@/lib/agent/steps/research";
-import { getJSON, sendJSON, tabId, usd } from "@/lib/client/api";
+import { getJSON, sendJSON, senderId, tabId, usd } from "@/lib/client/api";
 import type { CallSummary, CampaignView } from "@/lib/client/types";
 import type { DesignTokens } from "@/lib/brand/design-tokens";
 import { CallView } from "../inspector/call-view";
@@ -243,7 +243,7 @@ function AssetDetail({ asset, draft, vars, onChanged, initialTab = "preview" }: 
     }
   };
   const runFreeform = async (direction: string) => {
-    await sendJSON(`/api/assets/${asset.id}/freeform`, "POST", { direction, confirmed: true, author: author(), tab: tabId() });
+    await sendJSON(`/api/assets/${asset.id}/freeform`, "POST", { direction, confirmed: true, author: author(), authorId: senderId(), tab: tabId() });
     setFreeform(false);
     onChanged();
   };
@@ -251,7 +251,7 @@ function AssetDetail({ asset, draft, vars, onChanged, initialTab = "preview" }: 
     setResetting(true);
     setActionError(null);
     try {
-      await sendJSON(`/api/assets/${asset.id}/freeform`, "POST", { reset: true, author: author(), tab: tabId() });
+      await sendJSON(`/api/assets/${asset.id}/freeform`, "POST", { reset: true, author: author(), authorId: senderId(), tab: tabId() });
       onChanged();
     } catch (e) {
       setActionError((e as Error).message);
@@ -515,7 +515,7 @@ function Sources({ sources }: { sources: Sources | null }) {
         ) : <div className="text-muted">None used.</div>}
         {sources.researchRejected.length > 0 && (
           <details className="mt-2 text-xs text-muted">
-            <summary className="cursor-pointer">Rejected findings ({sources.researchRejected.length})</summary>
+            <summary className="cursor-(--cursor-hand)">Rejected findings ({sources.researchRejected.length})</summary>
             <ul className="mt-1 list-disc pl-5">{sources.researchRejected.map((r, i) => <li key={i}>{r}</li>)}</ul>
           </details>
         )}

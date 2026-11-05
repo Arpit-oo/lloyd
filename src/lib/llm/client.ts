@@ -80,6 +80,9 @@ const globalForLlm = globalThis as unknown as {
   __runSpend?: Map<string, number>;
 };
 
+/** A streamed answer with no event for this long is treated as stalled (see the streaming loop below). */
+const STALL_MS = 120_000;
+
 function client(): OpenAI {
   globalForLlm.__openai ??= new OpenAI({ apiKey: getConfig().OPENAI_API_KEY, maxRetries: 3, timeout: 180_000 });
   return globalForLlm.__openai;
@@ -212,13 +215,38 @@ async function execute<T>(
       const onText = req.onText ?? (req.ctx?.onText ? (s: string) => req.ctx!.onText!(req.step, s) : undefined);
       if (!onText) return client().responses.create(params, { signal: req.ctx?.signal });
       // Streaming: same request, output delivered as it is generated; usage comes with the final response.
-      const stream = client().responses.stream({ ...params, stream: true }, { signal: req.ctx?.signal });
-      let soFar = "";
-      stream.on("response.output_text.delta", (e) => {
-        soFar += e.delta;
-        onText(soFar);
-      });
-      return stream.finalResponse();
+      // A stream can stall mid-answer and never finish (seen: questions stopped halfway, run hung for
+      // 8+ minutes). If no event arrives for STALL_MS the attempt is aborted and retried once.
+      for (let attempt = 0; ; attempt++) {
+        const stall = new AbortController();
+        const signal = req.ctx?.signal ? AbortSignal.any([req.ctx.signal, stall.signal]) : stall.signal;
+        let timer = setTimeout(() => stall.abort(), STALL_MS);
+        const bump = () => {
+          clearTimeout(timer);
+          timer = setTimeout(() => stall.abort(), STALL_MS);
+        };
+        const stream = client().responses.stream({ ...params, stream: true }, { signal });
+        let soFar = "";
+        stream.on("event", bump);
+        stream.on("response.output_text.delta", (e) => {
+          soFar += e.delta;
+          onText(soFar);
+        });
+        try {
+          return await stream.finalResponse();
+        } catch (err) {
+          if (stall.signal.aborted && !req.ctx?.signal?.aborted) {
+            if (attempt < 1) {
+              onText("");
+              continue;
+            }
+            throw new Error(`The model stopped responding (no output for ${STALL_MS / 1000}s, twice). Try again.`);
+          }
+          throw err;
+        } finally {
+          clearTimeout(timer);
+        }
+      }
     });
     responseText = res.output_text ?? "";
     usage = readUsage(res.usage);

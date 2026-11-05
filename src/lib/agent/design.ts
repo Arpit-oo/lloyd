@@ -81,11 +81,18 @@ export interface BrandLook {
   fonts: string[];
 }
 
-/** Applies a request on top of the current style. Invalid colours and unknown fonts are ignored. */
-export function mergeStyle(current: AssetStyle | undefined, req: StyleRequest, brand: BrandLook): AssetStyle | undefined {
+/** A font name a design reference measured from its CSS: plain words, so it is safe in CSS and a Google Fonts URL. */
+const FONT_NAME = /^[A-Za-z][A-Za-z0-9 -]{1,39}$/;
+
+/**
+ * Applies a request on top of the current style. Invalid colours are ignored; fonts must be the
+ * brand's or the listed choices, unless `anyFont` (a design reference's own font, e.g. copied
+ * from a site the marketer pointed at), which then loads from Google Fonts or falls back.
+ */
+export function mergeStyle(current: AssetStyle | undefined, req: StyleRequest, brand: BrandLook, opts: { anyFont?: boolean } = {}): AssetStyle | undefined {
   if (req.reset_to_brand) return undefined;
   const allowedFonts = new Map([...brand.fonts, ...FONT_CHOICES].map((f) => [f.toLowerCase(), f]));
-  const font = (f: string | null) => (f ? allowedFonts.get(f.trim().toLowerCase()) : undefined);
+  const font = (f: string | null) => (f ? (allowedFonts.get(f.trim().toLowerCase()) ?? (opts.anyFont && FONT_NAME.test(f.trim()) ? f.trim() : undefined)) : undefined);
   const hex = (h: string | null) => (h && HEX.test(h.trim()) ? h.trim().toLowerCase() : undefined);
   const set: AssetStyle = {
     primary: hex(req.primary),

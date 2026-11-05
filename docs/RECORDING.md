@@ -16,7 +16,7 @@ Talk slowly. Pause a second after each click so the viewer sees the result. If a
 
 ## 0. Opening (30 s)
 
-1. Open http://localhost:3000/lloyd. Scroll once, slowly, to the cost cards.
+1. Open http://localhost:3000. Scroll once, slowly, to the cost cards.
    > "This is Lloyd, a brand-aware campaign agent. The brand folder is over 100k tokens and contradicts itself, so the point is getting the right parts into each prompt."
 2. Click **Start a campaign**.
 

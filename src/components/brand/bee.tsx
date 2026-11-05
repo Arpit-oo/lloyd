@@ -3,7 +3,7 @@
  * can be animated with plain CSS (wings flutter, body bobs). Purely decorative: aria-hidden
  * unless a label is given.
  */
-const GRID = [
+export const GRID = [
   "......K....K....",
   ".......K..K.....",
   "......KKKKKK....",
@@ -20,7 +20,7 @@ const GRID = [
   ".....KKKKKKKK...",
 ];
 
-const COLOR: Record<string, string> = {
+export const COLOR: Record<string, string> = {
   K: "#1d1a14",
   Y: "#f7c51e",
   O: "#e8901b",

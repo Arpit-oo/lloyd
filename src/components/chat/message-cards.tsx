@@ -11,10 +11,12 @@ import type { MessageRow } from "@/lib/client/types";
 import type { Memory } from "@/lib/memory/store";
 
 /** One renderer per agent message kind. Cards that ask for input call `onReply` with chat text. */
-export function MessageCard({ m, me = "", onReply, onOpenAsset, live, estimate }: {
+export function MessageCard({ m, me = "", sender, onReply, onOpenAsset, live, estimate }: {
   m: MessageRow;
   /** This person's display name; messages from anyone else in a shared chat are labelled. */
   me?: string;
+  /** In a shared chat, who sent this message ("Bella", "Guest", "Bella (you)"); overrides `me`. */
+  sender?: string;
   onReply: (text: string) => void;
   onOpenAsset: (id: string, tab?: "changes") => void;
   live: boolean;
@@ -23,7 +25,7 @@ export function MessageCard({ m, me = "", onReply, onOpenAsset, live, estimate }
   const c = m.content as Record<string, unknown>;
   if (m.role === "user") {
     const author = typeof c.author === "string" ? c.author : "";
-    return <UserMessage text={String(c.text ?? "")} author={author && author !== me.trim() ? author : ""} attachments={(c.attachments as { id: string; name: string; size: number }[] | undefined) ?? []} />;
+    return <UserMessage text={String(c.text ?? "")} author={sender ?? (author && author !== me.trim() ? author : "")} attachments={(c.attachments as { id: string; name: string; size: number }[] | undefined) ?? []} />;
   }
   switch (m.kind) {
     case "brand_check":
@@ -39,7 +41,7 @@ export function MessageCard({ m, me = "", onReply, onOpenAsset, live, estimate }
     case "confirm":
       return <ConfirmCard c={c as { question: string; conflicts: { rule: string; source_doc: string | null; affects: string[] }[] }} live={live} onReply={onReply} />;
     case "memory":
-      return <MemoryCard ids={c.proposedIds as string[]} />;
+      return <MemoryCard ids={c.proposedIds as string[]} saved={!!c.saved} />;
     default:
       return <AgentText>{String(c.text ?? "")}</AgentText>;
   }
@@ -53,7 +55,7 @@ function UserMessage({ text, author, attachments }: { text: string; author: stri
     <div className="flex flex-col items-end gap-2">
       {author && (
         <span className="flex items-center gap-1.5 text-[12.5px] text-muted">
-          <Avatar name={author} size={18} /> {author}
+          <Avatar name={author.replace(/ \(you\)$/, "")} size={18} /> {author}
         </span>
       )}
       {attachments.length > 0 && (
@@ -145,7 +147,7 @@ function BrandCheckCard({ items }: { items: BrandCheckItem[] }) {
       )}
       {ok.length > 0 && (
         <details className={`text-[13px] text-muted ${flagged.length ? "mt-3 border-t border-line pt-3" : ""}`}>
-          <summary className="cursor-pointer select-none">
+          <summary className="cursor-(--cursor-hand) select-none">
             <Check size={14} className="mr-1 inline text-ok" />
             {ok.length} requested item{ok.length > 1 ? "s" : ""} checked and allowed
           </summary>
@@ -157,8 +159,23 @@ function BrandCheckCard({ items }: { items: BrandCheckItem[] }) {
 }
 
 function QuestionsCard({ q, onReply, live }: { q: Questions & { memoriesUsed?: number }; onReply: (t: string) => void; live: boolean }) {
-  const [answers, setAnswers] = useState<Record<string, string>>({});
-  const done = q.questions.length > 0 && q.questions.every((x) => answers[x.id]);
+  // Each answer is a list: one item for single-choice questions, any number for multi-select ones.
+  // Clicking a picked option again un-picks it. "Own" is a typed answer, sent alongside any picks.
+  const [answers, setAnswers] = useState<Record<string, string[]>>({});
+  const [own, setOwn] = useState<Record<string, string>>({});
+  const pick = (x: Questions["questions"][number], o: string) => {
+    const cur = answers[x.id] ?? [];
+    // "None" / "No, …" in a multi-select question excludes the other options, and the reverse.
+    const exclusive = (v: string) => /^(no|none)\b/i.test(v);
+    const next = cur.includes(o) ? cur.filter((v) => v !== o) : !x.multi_select ? [o] : exclusive(o) ? [o] : [...cur.filter((v) => !exclusive(v)), o];
+    setAnswers({ ...answers, [x.id]: next });
+  };
+  const answerOf = (x: Questions["questions"][number]) => [...(answers[x.id] ?? []), own[x.id]?.trim()].filter(Boolean).join(", ");
+  const answered = q.questions.filter((x) => answerOf(x));
+  const send = () =>
+    answered.length === 0
+      ? onReply("Go with your suggested answers.")
+      : onReply(q.questions.map((x) => `${x.question.replace(/\?$/, "")}: ${answerOf(x) || `${x.default} (your suggestion)`}`).join("\n"));
   const n = q.questions.length;
   return (
     <Card icon={<Sparkles size={17} className="text-accent" />} title={n ? `Before I plan: ${n} question${n > 1 ? "s" : ""}` : "I have what I need. Here is what I assumed"}>
@@ -171,37 +188,54 @@ function QuestionsCard({ q, onReply, live }: { q: Questions & { memoriesUsed?: n
         {q.questions.map((x) => (
           <fieldset key={x.id}>
             <legend className="font-medium">{x.question}</legend>
+            {x.multi_select && <p className="mt-0.5 text-[12px] font-medium text-accent-ink">Pick one or more</p>}
             <p className="mt-0.5 text-[13px] text-muted">{x.why}</p>
             <div className="mt-2.5 flex flex-wrap gap-2">
               {x.options.map((o) => (
                 <button
                   key={o}
                   disabled={!live}
-                  aria-pressed={answers[x.id] === o}
-                  onClick={() => setAnswers({ ...answers, [x.id]: o })}
-                  className={`rounded-full border px-3 py-1.5 text-[13px] transition-colors disabled:cursor-default ${answers[x.id] === o ? "border-ink bg-ink text-on-ink" : "border-line bg-surface hover:border-line-strong"}`}
+                  aria-pressed={!!answers[x.id]?.includes(o)}
+                  onClick={() => pick(x, o)}
+                  className={`rounded-full border px-3 py-1.5 text-[13px] transition-colors disabled:cursor-default ${answers[x.id]?.includes(o) ? "border-ink bg-ink text-on-ink" : "border-line bg-surface hover:border-line-strong"}`}
                 >
-                  {answers[x.id] === o && <Check size={13} className="-ml-0.5 mr-1 inline" />}
+                  {answers[x.id]?.includes(o) && <Check size={13} className="-ml-0.5 mr-1 inline" />}
                   {o}
-                  {o === x.default && <span className={`ml-1.5 text-[12px] ${answers[x.id] === o ? "text-on-ink/75" : "text-muted"}`}>suggested</span>}
+                  {o === x.default && <span className={`ml-1.5 text-[12px] ${answers[x.id]?.includes(o) ? "text-on-ink/75" : "text-muted"}`}>suggested</span>}
                 </button>
               ))}
             </div>
+            {live && (
+              <input
+                value={own[x.id] ?? ""}
+                onChange={(e) => setOwn({ ...own, [x.id]: e.target.value })}
+                onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), send())}
+                placeholder="Or type your own answer"
+                aria-label={`Your own answer: ${x.question}`}
+                className="mt-2 w-full max-w-md rounded-lg border border-line bg-surface px-3 py-1.5 text-[13px] outline-none placeholder:text-muted focus:border-line-strong"
+              />
+            )}
           </fieldset>
         ))}
       </div>
       {q.assumptions.length > 0 && (
         <details className="mt-4 text-[13px] text-muted" open={!n}>
-          <summary className="cursor-pointer select-none font-medium">What I assumed ({q.assumptions.length})</summary>
+          <summary className="cursor-(--cursor-hand) select-none font-medium">What I assumed ({q.assumptions.length})</summary>
           <ul className="mt-1.5 list-disc space-y-1 pl-5">{q.assumptions.map((a, i) => <li key={i}>{a}</li>)}</ul>
         </details>
       )}
       {live && n > 0 && (
-        <div className="mt-4 flex flex-wrap gap-2">
-          <button disabled={!done} onClick={() => onReply(q.questions.map((x) => `${x.question.replace(/\?$/, "")}: ${answers[x.id]}`).join("\n"))} className="rounded-lg bg-ink px-3.5 py-2 text-[13px] font-semibold text-on-ink disabled:opacity-40">
-            Send answers
+        <div className="mt-4 flex flex-wrap items-center gap-x-3 gap-y-2">
+          <button onClick={send} className="rounded-lg bg-ink px-3.5 py-2 text-[13px] font-semibold text-on-ink">
+            {answered.length === 0 ? "Use suggested answers" : answered.length === n ? "Send answers" : `Send answers (${n - answered.length} suggested)`}
           </button>
-          <button onClick={() => onReply("Go with your suggested answers.")} className="rounded-lg border border-line px-3.5 py-2 text-[13px] font-semibold hover:border-line-strong">Use suggested answers</button>
+          <span className="text-[12.5px] text-muted">
+            {answered.length === 0
+              ? "Pick or type answers to change any of them."
+              : answered.length === n
+                ? "Sends what you picked or typed."
+                : "Questions you left blank use the suggested answer."}
+          </span>
         </div>
       )}
     </Card>
@@ -215,7 +249,7 @@ function PlanCard({ plan, onReply, live, estimate }: { plan: Plan; onReply: (t: 
     <Card icon={<Pencil size={17} className="text-accent" />} title={`Proposed plan · ${plan.items.length} asset${plan.items.length === 1 ? "" : "s"}`}>
       <p className="leading-relaxed">{plan.summary}</p>
       <details className="mt-2 text-[13px] text-muted">
-        <summary className="cursor-pointer select-none font-medium">Why this mix</summary>
+        <summary className="cursor-(--cursor-hand) select-none font-medium">Why this mix</summary>
         <p className="mt-1 leading-relaxed">{plan.mix_rationale}</p>
       </details>
       <ol className="-mx-4 mt-3 divide-y divide-line border-y border-line">
@@ -334,7 +368,8 @@ function ConfirmCard({ c, live, onReply }: { c: { question: string; conflicts: {
   );
 }
 
-function MemoryCard({ ids }: { ids: string[] }) {
+/** Proposed memories to keep or forget, or (saved) ones the marketer asked to remember, which can still be forgotten. */
+function MemoryCard({ ids, saved = false }: { ids: string[]; saved?: boolean }) {
   const [mems, setMems] = useState<Memory[]>([]);
   const key = ids.join();
   useEffect(() => {
@@ -345,9 +380,9 @@ function MemoryCard({ ids }: { ids: string[] }) {
     await sendJSON(`/api/memories/${id}`, "PATCH", { status });
     setMems((cur) => cur.map((m) => (m.id === id ? { ...m, status } : m)));
   };
-  if (!ids.length) return <AgentText>Nothing from this campaign seems worth remembering beyond what the brand documents already say.</AgentText>;
+  if (!ids.length) return <AgentText>{saved ? "That is already in memory, so there was nothing new to save." : "Nothing from this campaign seems worth remembering beyond what the brand documents already say."}</AgentText>;
   return (
-    <Card icon={<Brain size={17} className="text-accent" />} title="Remember these for next time?">
+    <Card icon={<Brain size={17} className="text-accent" />} title={saved ? "Saved to memory for future campaigns" : "Remember these for next time?"}>
       <ul className="space-y-3">
         {mems.map((m) => (
           <li key={m.id} className="flex items-start gap-3">
@@ -360,6 +395,8 @@ function MemoryCard({ ids }: { ids: string[] }) {
                 <button onClick={() => set(m.id, "active")} className="rounded-md bg-ink px-2.5 py-1 text-[13px] text-on-ink">Keep</button>
                 <button onClick={() => set(m.id, "archived")} className="rounded-md border border-line px-2.5 py-1 text-[13px]">Forget</button>
               </div>
+            ) : saved && m.status === "active" ? (
+              <button onClick={() => set(m.id, "archived")} className="shrink-0 rounded-md border border-line px-2.5 py-1 text-[13px]">Forget</button>
             ) : (
               <span className="shrink-0 text-[13px] text-muted">{m.status === "active" ? "Kept" : "Forgotten"}</span>
             )}

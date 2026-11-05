@@ -1,8 +1,10 @@
+import { z } from "zod";
+import { humanizeContent } from "@/lib/text/punctuation";
 import { requireBrand, type Brand } from "@/lib/brand";
 import { db, newId } from "@/lib/db";
 import { resolveModels, type ModelSettings } from "@/lib/llm/catalog";
 import { llm, type CallContext } from "@/lib/llm/client";
-import { proposeMemories } from "@/lib/memory/extract";
+import { proposeMemories, rememberNow, styleFromMemories } from "@/lib/memory/extract";
 import { markUsed, memoriesForPrompt } from "@/lib/memory/store";
 import { getAttachments, linkAttachments, renderAttachments, toReferences } from "./attachments";
 import { mergeStyle } from "./design";
@@ -21,7 +23,7 @@ import { decideQuestions } from "./steps/questions";
 import { routeMessage } from "./steps/router";
 import { writeAsset, writerPrefix } from "./steps/writer";
 import { ASSET_LABEL, ASSET_SCHEMAS, ASSET_TYPES, type AssetContent, type AssetType } from "./asset-types";
-import type { CampaignData, PlanItem } from "./types";
+import type { BrandCheckItem, CampaignData, PlanItem, Questions } from "./types";
 import { draftText } from "@/lib/text/partial-json";
 
 /**
@@ -52,6 +54,8 @@ export interface MessageOptions {
   models?: ModelSettings;
   /** Display name of the person who sent it (shared chats show who said what). */
   author?: string;
+  /** The sender's browser id, so shared chats can label whose message is whose. */
+  authorId?: string;
   /** Asset types picked with the chips under the message box; the first plan uses only these. */
   assetTypes?: AssetType[];
 }
@@ -68,13 +72,19 @@ export async function handleMessage(campaignId: string, text: string, emit: Emit
 
   const files = getAttachments(opts.attachmentIds ?? []);
   if (files.length) linkAttachments(files.map((f) => f.id), campaignId);
-  t.say("user", "text", { text, attachments: files.map((f) => ({ id: f.id, name: f.name, size: f.size })), ...(opts.author ? { author: opts.author } : {}) });
+  t.say("user", "text", { text, attachments: files.map((f) => ({ id: f.id, name: f.name, size: f.size })), ...(opts.author ? { author: opts.author } : {}), ...(opts.authorId ? { authorId: opts.authorId } : {}) });
 
   try {
     // References: images and links always; documents too once the brief is in (before that, a
     // document is the brief). Links are read now, so every later step can use them.
     const docs = files.filter((f) => f.kind !== "image");
-    const refs: Reference[] = toReferences(campaign.state === "new" ? files.filter((f) => f.kind === "image") : files);
+    // A document sent with a question about it is read, not kept as a reference.
+    const docQuestion = docs.length > 0 && isDocQuestion(text);
+    // Documents sent before any plan, when what's on file isn't a real brief ("hi, what can you
+    // do?" from an older chat): they are the brief, not references.
+    const weakBrief = (s = "") => isSmallTalk(s) || s.trim().split(/\s+/).filter(Boolean).length < 8;
+    const briefNow = (campaign.state === "clarifying" || campaign.state === "plan_review") && docs.length > 0 && !docQuestion && weakBrief(campaign.data.briefText);
+    const refs: Reference[] = toReferences(campaign.state === "new" || docQuestion || briefNow ? files.filter((f) => f.kind === "image") : files);
     const urls = referenceUrls(text);
     if (urls.length) {
       t.status(`Reading ${urls.length > 1 ? `${urls.length} reference links` : "the reference link"}`);
@@ -91,27 +101,39 @@ export async function handleMessage(campaignId: string, text: string, emit: Emit
     }
 
     if (campaign.state === "new") {
-      // An attached document can be the brief, or add to a typed one.
-      const brief = [text, renderAttachments(docs)].filter((s) => s.trim()).join("\n\n");
-      if (!docs.length && !refs.length && isSmallTalk(text)) {
-        // "hi", "thanks", "what can you do?": not a brief, so don't run the brief pipeline on it.
-        t.reply(
-          `Hi${opts.author ? ` ${opts.author}` : ""}! I write on-brand campaign assets for ${brand.tokens?.brand_name || "your brand"}: LinkedIn and X posts, blog posts, landing pages and emails, checked against the brand's rules.\n\nTo start, paste or attach a brief (PDF, Word, PowerPoint, Markdown), or tell me what you're launching, for whom, and which assets you need. You can also pick a sample brief below.`,
-        );
-        return;
-      }
-      if (!brief.trim()) {
-        // Only images: keep them as references and ask for the brief itself.
-        t.reply("Got your reference. Now tell me about the campaign: paste or attach the brief, or describe what you're launching, for whom, and which assets you need.");
-        return;
-      }
-      await startFromBrief(brand, t, brief);
+      await handleNew(brand, t, text, docs, { draftFiles: campaign.data.draftFiles, draftDocs: campaign.data.draftDocs, hasRefs: refs.length > 0, author: opts.author });
     } else {
+      // A question about a document attached just now (any state): answer from it.
+      if (docs.length && isDocQuestion(text)) {
+        t.status("Reading the document");
+        t.reply(await explainDocument(brand, text, renderAttachments(docs), ctx, false));
+        return;
+      }
+      if (briefNow) {
+        // A short real brief ("Leashgate webinar post") is kept and the documents added to it; a greeting is dropped.
+        const old = campaign.data.briefText ?? "";
+        await restartFromBrief(brand, t, [isSmallTalk(old) ? "" : old, text].filter((s) => s.trim()).join("\n\n"), docs, opts.author);
+        return;
+      }
       // A reply to "this goes against the brand, are you sure?"
       const pending = campaign.data.pendingEdit;
       if (pending) {
         store.updateCampaign(campaignId, { data: { pendingEdit: null } });
         const reply = confirmIntent(text);
+        if (pending.kind === "plan" && reply) {
+          if (reply === "no") {
+            t.reply("OK, I left the plan as it was.");
+            return;
+          }
+          if (reply === "yes")
+            store.updateCampaign(campaignId, { data: { voiceOverrides: [...(campaign.data.voiceOverrides ?? []), `"${pending.instruction}" (for the plan and the assets written from it; overrides: ${pending.conflicts.map((c) => c.rule).join("; ")})`] } });
+          const note =
+            reply === "yes"
+              ? "The marketer was warned this goes against the brand and confirmed. Make the change fully in the plan. Only legal rules, forbidden claims, names and facts still limit it."
+              : "Apply this only where the brand's rules and the campaign constraints allow. Where they don't, leave that part out and say so in mix_rationale.";
+          await revise(brand, t, `${pending.instruction}\n\n${note}`, { confirmed: true });
+          return;
+        }
         if (reply === "yes") {
           const titles = pending.assetIds.map((id) => store.getAsset(id)?.title).filter(Boolean).join(", ");
           store.updateCampaign(campaignId, { data: { voiceOverrides: [...(campaign.data.voiceOverrides ?? []), `"${pending.instruction}" (for: ${titles}; overrides: ${pending.conflicts.map((c) => c.rule).join("; ")})`] } });
@@ -129,7 +151,7 @@ export async function handleMessage(campaignId: string, text: string, emit: Emit
         // Anything else: drop the question and treat it as a new message.
       }
       const route = await routeMessage(
-        { state: campaign.state, message: text, plan: campaign.data.plan, assets: store.listAssets(campaignId), recent: recentTranscript(campaignId, 8) },
+        { state: campaign.state, message: text, plan: campaign.data.plan, assets: store.listAssets(campaignId), recent: recentTranscript(campaignId, 8), brief: campaign.data.briefText, attachments: docs.map((d) => ({ name: d.name, text: d.text })) },
         ctx,
       );
       if (route.needs_clarification) t.reply(route.needs_clarification);
@@ -156,6 +178,19 @@ export async function handleMessage(campaignId: string, text: string, emit: Emit
           case "finish_campaign":
             await finish(brand, t);
             break;
+          case "remember": {
+            t.status("Saving to memory");
+            const ids = await rememberNow(brand.hash, campaignId, text, recentTranscript(campaignId, 8), ctx);
+            t.say("assistant", "memory", { proposedIds: ids, saved: true });
+            break;
+          }
+          case "new_brief": {
+            // The attached documents are the brief, not references to keep.
+            const names = new Set(docs.map((d) => d.name));
+            if (docs.length) store.updateCampaign(campaignId, { data: { references: (t.data().references ?? []).filter((r) => r.kind === "image" || !names.has(r.name)) } });
+            await restartFromBrief(brand, t, text, docs, opts.author);
+            break;
+          }
           case "chat":
             t.reply(route.reply ?? "Got it.");
             break;
@@ -185,9 +220,50 @@ function settleAfterStop(campaignId: string) {
 
 /** A greeting, thanks or "what can you do" on its own: short and nothing like a brief. */
 export function isSmallTalk(text: string): boolean {
-  const t = text.trim().toLowerCase().replace(/[!?.,:;)(*~\s]+$/g, "");
-  if (!t || t.split(/\s+/).length > 6) return false;
-  return /^(hi+|hey+|hello+|yo+|hiya|howdy|sup|gm|good (morning|afternoon|evening)|thanks?|thank you|ty|ok(ay)?|cool|test(ing)?|ping|help|what can you do|who are you|what are you|how does this work|how do i (start|use this))(\s+(there|lloyd|team|all|everyone|again|mate|buddy))?$/.test(t);
+  // Punctuation becomes spaces so "Hi, what can you do?" is a run of small-talk phrases.
+  const t = text.trim().toLowerCase().replace(/[^a-z0-9' ]+/g, " ").replace(/\s+/g, " ").trim();
+  if (!t || t.split(" ").length > 15) return false;
+  const PHRASE =
+    "(hi+|hey+|hello+|yo+|hiya|howdy|sup|gm|good (morning|afternoon|evening)|thanks?|thank you|ty|ok(ay)?|cool|test(ing)?|ping|help|so|and|please" +
+    "|what can you (do|help( me)? with)|what do you do|how can you help( me)?|can you help( me)?|who are you|what are you|what is this|what's this" +
+    "|how does this work|how do i (start|use (this|you|it))|where do i start|what should i do( first)?)" +
+    "( (there|lloyd|team|all|everyone|again|mate|buddy))?";
+  return new RegExp(`^${PHRASE}( ${PHRASE})*$`).test(t);
+}
+
+/**
+ * A question about attached documents rather than a request to plan from them: "what does this
+ * say?", "summarize it", "tell me about this". Anything that asks for work (plan, write, make, go)
+ * is not, so the brief pipeline runs as before.
+ */
+export function isDocQuestion(text: string): boolean {
+  const t = text.trim().toLowerCase();
+  if (!t || t.split(/\s+/).length > 25) return false;
+  if (/\b(plan|write|draft|create|make|produce|generate|run|start|go ahead|launch it|use (it|this|that) as|campaign for)\b/.test(t)) return false;
+  return (
+    t.includes("?") ||
+    /^(what|whats|what's|who|which|how|why|when|does|is|are|tell me|explain|summari[sz]e|summary|describe|read|walk me through|give me (a|the) (summary|gist|rundown))\b/.test(t) ||
+    /\b(about (this|it|that|the (file|doc|document|brief|attachment))|what (it|this|that) says|what does (it|this|that) say)\b/.test(t)
+  );
+}
+
+const DOC_QUESTION_RULES = `A marketer attached a document to a campaign tool and asked a question about it.
+Answer their question plainly and briefly, from the document only. Use short paragraphs or a few bullets; quote the document where it helps.
+Do not judge it against brand rules and do not start planning.`;
+/** Only in a new campaign: once a campaign is under way, the next step is already on screen. */
+const OFFER_PLAN = `If the document reads like a campaign brief, end with one line saying you can check it against the brand and propose a plan whenever they say "go".`;
+
+async function explainDocument(brand: Brand, question: string, docText: string, ctx: CallContext, offerPlan = true): Promise<string> {
+  const res = await llm.text({
+    step: "doc:explain",
+    tier: "fast",
+    effort: "low",
+    system: [{ label: "doc question rules", text: `${DOC_QUESTION_RULES}${offerPlan ? `\n${OFFER_PLAN}` : ""}\nBrand: ${brand.tokens?.brand_name ?? "unknown"}.` }],
+    input: [{ label: "document", text: docText.slice(0, 40_000) }, { label: "question", text: `Question: ${question}` }],
+    maxOutputTokens: 1_500,
+    ctx,
+  });
+  return res.data.trim();
 }
 
 // ---------- flows ----------
@@ -195,10 +271,10 @@ export function isSmallTalk(text: string): boolean {
 async function startFromBrief(brand: Brand, t: Turn, briefText: string) {
   const today = new Date().toISOString().slice(0, 10);
   t.status("Reading the brief");
-  const brief = await readBrief(brand, briefText, today, t.ctx);
   const memories = memoriesForPrompt(brand.hash);
+  const [brief, memoryStyle] = await Promise.all([readBrief(brand, briefText, today, t.ctx), styleFromMemories(memories, t.ctx)]);
   markUsed(memories.map((m) => m.id));
-  store.updateCampaign(t.campaignId, { title: brief.title, data: { briefText, brief, memoryIds: memories.map((m) => m.id) } });
+  store.updateCampaign(t.campaignId, { title: brief.title, data: { briefText, brief, memoryIds: memories.map((m) => m.id), ...(memoryStyle ? { memoryStyle } : {}) } });
 
   t.status("Checking the brief against brand and legal rules");
   const brandCheck = await checkBrief(brand, brief, t.ctx);
@@ -207,6 +283,12 @@ async function startFromBrief(brand: Brand, t: Turn, briefText: string) {
 
   t.status("Deciding whether I need to ask anything");
   const questions = await decideQuestions(brand, t.data(), memories, t.ctx);
+  // Anything the brand check changed or refused is the marketer's call too: ask before planning.
+  const flagged = brandCheck.filter((i) => i.verdict !== "ok");
+  if (flagged.length) questions.questions.push(brandCheckQuestion(flagged));
+  // The card marks the suggested option itself; drop "(default)" / "Default:" the model sometimes writes into the text.
+  const tidy = (o: string) => o.replace(/\s*\((default|suggested)\)\s*$/i, "").replace(/^(default|suggested):\s*/i, "").trim();
+  questions.questions = questions.questions.map((x) => ({ ...x, options: x.options.map(tidy), default: tidy(x.default) }));
   store.updateCampaign(t.campaignId, { data: { questions } });
 
   if (questions.questions.length) {
@@ -218,7 +300,151 @@ async function startFromBrief(brand: Brand, t: Turn, briefText: string) {
   }
 }
 
+type DraftFile = { name: string; text: string };
+
+/**
+ * A new campaign's message: the brief (typed, attached, or both), a question about an attached
+ * document, "remember …", or small talk. Several documents at once may be separate briefs, so
+ * the agent asks which one this campaign is for unless the message says they belong together.
+ */
+async function handleNew(
+  brand: Brand,
+  t: Turn,
+  text: string,
+  docs: DraftFile[],
+  o: { draftFiles?: DraftFile[]; draftDocs?: string; hasRefs: boolean; author?: string },
+) {
+  // Documents sent earlier in this new campaign (with a question, or before picking one) are kept
+  // and used once the marketer says go.
+  const newDocs = docs.map((d) => ({ name: d.name, text: d.text }));
+  const pool = newDocs.length ? newDocs : (o.draftFiles ?? []);
+  const docText = pool.length ? renderAttachments(pool) : (o.draftDocs ?? "");
+  if (newDocs.length) store.updateCampaign(t.campaignId, { data: { draftDocs: docText, draftFiles: newDocs } });
+  if (docText && isDocQuestion(text)) {
+    // "what does this say?": answer about the document instead of running it as a brief.
+    t.status("Reading the document");
+    t.reply(await explainDocument(brand, text, docText, t.ctx));
+    return;
+  }
+  // "Remember …" before any brief: save it, don't treat it as a brief.
+  if (!docText && /^(please\s+)?(remember|from now on|always use|keep in mind)\b/i.test(text.trim())) {
+    t.status("Saving to memory");
+    const ids = await rememberNow(brand.hash, t.campaignId, text, "", t.ctx);
+    t.say("assistant", "memory", { proposedIds: ids, saved: true });
+    return;
+  }
+  if (!docText && !o.hasRefs && isSmallTalk(text)) {
+    // "hi", "thanks", "what can you do?": not a brief, so don't run the brief pipeline on it.
+    t.reply(
+      `Hi${o.author ? ` ${o.author}` : ""}! I write on-brand campaign assets for ${brand.tokens?.brand_name || "your brand"}: LinkedIn and X posts, blog posts, landing pages and emails, checked against the brand's rules.\n\nTo start, paste or attach a brief (PDF, Word, PowerPoint, Markdown), or tell me what you're launching, for whom, and which assets you need. You can also pick a sample brief below.`,
+    );
+    return;
+  }
+  // A short message with no document may still be chat ("before that, how are you?"), not a brief.
+  if (!docText && !o.hasRefs && text.trim().split(/\s+/).length <= 40) {
+    const opening = await classifyOpening(brand, text, t.ctx);
+    if (opening.kind === "chat") {
+      t.reply(`${opening.reply.trim()}\n\nWhen you're ready, paste or attach a brief, or tell me what you're launching, for whom, and which assets you need.`);
+      return;
+    }
+  }
+  let briefDocs = docText;
+  let picked: DraftFile[] = [];
+  if (pool.length >= 2 && !COMBINE.test(text)) {
+    picked = pickFiles(pool, text);
+    if (picked.length) briefDocs = renderAttachments(picked);
+    else if (newDocs.length) {
+      t.reply(
+        `You sent ${pool.length} documents: ${pool.map((f) => f.name).join(", ")}.\n\nIf they are separate briefs, each works best as its own campaign: tell me which one to start with here (e.g. "use ${pool[0].name.replace(/\.[a-z0-9]+$/i, "")}" or "the first one") and start the others in new chats. If they belong to one campaign, say "one campaign".`,
+      );
+      return;
+    }
+  }
+  // A message that only picks a file ("use mock-1", "the first one") isn't part of the brief.
+  const brief = [picked.length && isPickOnly(text) ? "" : text, briefDocs].filter((s) => s.trim()).join("\n\n");
+  if (!brief.trim()) {
+    // Only images: keep them as references and ask for the brief itself.
+    t.reply("Got your reference. Now tell me about the campaign: paste or attach the brief, or describe what you're launching, for whom, and which assets you need.");
+    return;
+  }
+  store.updateCampaign(t.campaignId, { data: { draftFiles: undefined, draftDocs: undefined } });
+  await startFromBrief(brand, t, brief);
+}
+
+const OpeningSchema = z.object({
+  kind: z.enum(["brief", "chat"]),
+  reply: z.string().describe("If chat: a short, friendly answer (one or two sentences). Empty if brief."),
+});
+
+/** Is the first message of a campaign a brief (however vague) or just chat? Briefs go to the brief pipeline. */
+async function classifyOpening(brand: Brand, text: string, ctx: CallContext): Promise<z.infer<typeof OpeningSchema>> {
+  const res = await llm.json({
+    step: "intake:opening",
+    tier: "fast",
+    effort: "low",
+    system: [{ text: `You are Lloyd, a campaign assistant that writes on-brand marketing assets (LinkedIn and X posts, blog posts, landing pages, emails) for ${brand.tokens?.brand_name || "the brand"}.
+Decide whether the marketer's message is a campaign brief or request for marketing work, however short or vague ("awareness push for Quenchline", "LinkedIn posts about the launch", "something for the webinar") = "brief";
+or chat that asks for no marketing work: greetings, how are you, questions about you or how this works, thanks, jokes, off-topic remarks = "chat". When unsure, "brief".
+For chat, answer it briefly and warmly, as Lloyd. Don't ask for a brief; that is added after your reply.` }],
+    input: text,
+    schema: OpeningSchema,
+    schemaName: "opening",
+    ctx,
+  });
+  return res.data;
+}
+
+const COMBINE =/\b(together|combine[d]?|one campaign|single campaign|same campaign|all (of )?(them|these|the (docs|documents|files|briefs)))\b/i;
+const ORDINALS = ["first", "second", "third", "fourth", "fifth", "sixth"];
+const GENERIC_WORDS = new Set(["brief", "briefs", "mock", "campaign", "final", "draft", "copy", "file", "docs", "document", "the", "and", "for", "new", "v1", "v2", "v3"]);
+
+/** Which of several attached files the message names: by ordinal ("the second one", "#2"), or a distinctive word of its file name. */
+export function pickFiles<T extends { name: string }>(files: T[], text: string): T[] {
+  const t = text.toLowerCase();
+  return files.filter((f, i) => {
+    if (new RegExp(`\\b${ORDINALS[i]}\\b`).test(t) || new RegExp(`(^|[^0-9.])#?${i + 1}(?![0-9.])`).test(t.replace(/[-_]/g, " "))) return true;
+    const words = f.name.toLowerCase().replace(/\.[a-z0-9]+$/, "").split(/[^a-z0-9]+/).filter((w) => w.length >= 4 && !GENERIC_WORDS.has(w) && !/^\d+$/.test(w));
+    return words.some((w) => new RegExp(`\\b${w}\\b`).test(t));
+  });
+}
+
+/** "use mock-1", "the first one", "go with the webinar one": picks a file and says nothing else. */
+function isPickOnly(text: string): boolean {
+  return text.trim().split(/\s+/).length <= 8 && /^(ok(ay)?[, ]+)?(use|pick|take|start with|go with|let's do|lets do|do|the)\b/i.test(text.trim());
+}
+
+/** A new or replacement brief before any asset is written: drop the old questions and plan, and start as a new campaign would. */
+async function restartFromBrief(brand: Brand, t: Turn, text: string, docs: DraftFile[], author?: string) {
+  store.updateCampaign(t.campaignId, { state: "new", data: { questions: undefined, answers: undefined, plan: undefined, brandCheck: undefined, pendingEdit: null, draftDocs: undefined, draftFiles: undefined } });
+  t.emit({ type: "state", state: "new" });
+  await handleNew(brand, t, text, docs, { hasRefs: false, author });
+}
+
+export const BRAND_CHECK_QUESTION_ID = "brand_check";
+export const BRAND_CHECK_NONE = "No, the alternatives are fine";
+const shortLabel = (s: string) => {
+  // "certification: Wickhold is FedRAMP Authorized" -> "Wickhold is FedRAMP Authorized"
+  const plain = s.replace(/[*_`]/g, "").replace(/\s+/g, " ").trim().replace(/^[a-z_ ]{3,24}:\s+/i, "");
+  return plain.length <= 90 ? plain : `${plain.slice(0, 87).replace(/\s+\S*$/, "")}…`;
+};
+
+/** One multi-select question listing what the brand check won't do as written; the default keeps the alternatives. */
+function brandCheckQuestion(flagged: BrandCheckItem[]): Questions["questions"][number] {
+  const n = flagged.length;
+  return {
+    id: BRAND_CHECK_QUESTION_ID,
+    question: n === 1 ? "I won't do one thing in the brief as written (see above). Do you still need it?" : `I won't do ${n} things in the brief as written (see above). Do you still need any of them?`,
+    why: "Pick any you need and I'll find the closest way the brand and legal rules allow. Otherwise I'll use the alternatives shown above.",
+    options: [BRAND_CHECK_NONE, ...flagged.map((i) => shortLabel(i.requested))],
+    multi_select: true,
+    default: BRAND_CHECK_NONE,
+  };
+}
+
+const BRAND_CHECK_NOTE = `Brand check items the marketer still needs (if any are named in the answers above): keep each one in the plan in the closest form the brand and legal rules allow (approved wording, a scoped or softened claim, a different channel), and say in mix_rationale what you kept and how. A forbidden claim, a customer that can't be named, or an internal number still never appears as written.`;
+
 async function planFromAnswers(brand: Brand, t: Turn, answers: string) {
+  if (t.data().questions?.questions.some((q) => q.id === BRAND_CHECK_QUESTION_ID)) answers = `${answers}\n\n${BRAND_CHECK_NOTE}`;
   store.updateCampaign(t.campaignId, { data: { answers } });
   await plan(brand, t);
 }
@@ -235,8 +461,18 @@ async function plan(brand: Brand, t: Turn) {
   t.setState("plan_review");
 }
 
-async function revise(brand: Brand, t: Turn, request: string) {
+async function revise(brand: Brand, t: Turn, request: string, opts: { confirmed?: boolean } = {}) {
   const before = t.data().plan;
+  // Same guard rail as edits: a plan change that goes against the brand ("add emojis") asks first.
+  if (!opts.confirmed) {
+    t.status("Checking the request against the brand's rules");
+    const check = await checkEditRequest(brand, t.data(), request, (before?.items ?? []).map((i) => ({ title: i.title, type: i.type })), t.ctx);
+    if (check.verdict === "confirm") {
+      store.updateCampaign(t.campaignId, { data: { pendingEdit: { kind: "plan", instruction: request, assetIds: [], conflicts: check.conflicts } } });
+      t.say("assistant", "confirm", { question: check.question, conflicts: check.conflicts, instruction: request });
+      return;
+    }
+  }
   t.status("Updating the plan");
   const p = await revisePlan(brand, t.data(), memoriesForPrompt(brand.hash), request, t.ctx);
   store.updateCampaign(t.campaignId, { data: { plan: p } });
@@ -287,7 +523,9 @@ async function writeItems(brand: Brand, t: Turn, items: PlanItem[]) {
       const ctx = { ...t.ctx, assetId: row.id };
       const written = await writeAsset(brand, data, memories, item, ctx, throttle(250, (raw) => t.emit({ type: "draft", assetId: row.id, text: draftText(raw) })));
       // Web pages and emails start from the design of the marketer's reference, if they sent one.
-      const refStyle = data.referenceStyle && WEB_TYPES.has(item.type) ? mergeStyle(undefined, data.referenceStyle, brandLook(brand)) : undefined;
+      // Starting design: a design reference sent in this campaign, else remembered design preferences.
+      const startStyle = data.referenceStyle ?? data.memoryStyle;
+      const refStyle = startStyle && WEB_TYPES.has(item.type) ? mergeStyle(undefined, startStyle, brandLook(brand), { anyFont: true }) : undefined;
       if (refStyle) written.content = { ...written.content, style: refStyle };
       const version = store.addVersion(row.id, { content: written.content, sources: written.sources });
       t.emit({ type: "asset", assetId: row.id });
@@ -382,7 +620,8 @@ async function edit(brand: Brand, t: Turn, assetIds: string[], instruction: stri
         edited.summary = `${redraw.summary} (Free-form design: the brand's look is not enforced.)`;
       }
       // Nothing changed (e.g. the request didn't apply): say so without making an identical version.
-      if (JSON.stringify(edited.content) === JSON.stringify(current.content)) {
+      // Compared with dashes cleaned on both sides, so plain punctuation alone never counts as a change.
+      if (JSON.stringify(edited.content) === JSON.stringify({ ...current.content, data: humanizeContent(current.content.data) })) {
         return { assetId: id, title: asset.title, summary: edited.summary, version: asset.current_version, guard: (current.guard as { status?: string } | null)?.status ?? null };
       }
       let version = store.addVersion(id, { content: edited.content, sources: current.sources, instruction: label });
@@ -420,6 +659,8 @@ async function finish(brand: Brand, t: Turn) {
 
 // ---------- helpers ----------
 
+const HUMANIZE_KINDS = new Set(["text", "plan", "questions"]);
+
 class Turn {
   constructor(
     readonly campaignId: string,
@@ -434,7 +675,9 @@ class Turn {
     this.emit({ type: "status", text });
   }
   say(role: "user" | "assistant", kind: string, content: unknown) {
-    const message = store.addMessage(this.campaignId, role, kind, role === "assistant" ? { ...(content as object), runId: this.ctx.runId } : content);
+    // Lloyd's own words read like a person: no em dashes. Brand-check quotes stay verbatim.
+    const said = role === "assistant" && HUMANIZE_KINDS.has(kind) ? humanizeContent(content) : content;
+    const message = store.addMessage(this.campaignId, role, kind, role === "assistant" ? { ...(said as object), runId: this.ctx.runId } : said);
     this.emit({ type: "message", message });
   }
   reply(text: string) {
@@ -507,7 +750,7 @@ function recentTranscript(campaignId: string, n: number): string {
 export async function applyFreeform(
   campaignId: string,
   assetId: string,
-  opts: { direction: string; reset: boolean; author?: string },
+  opts: { direction: string; reset: boolean; author?: string; authorId?: string },
   emit: Emit,
   signal?: AbortSignal,
 ): Promise<void> {
@@ -520,7 +763,7 @@ export async function applyFreeform(
   const ctx: CallContext = { runId, campaignId, assetId, signal, models: resolveModels(campaign.data.models), onText: liveText(emit) };
   const t = new Turn(campaignId, ctx, emit);
   const instruction = opts.reset ? "Back to the brand template" : `Free-form design: ${opts.direction}`;
-  t.say("user", "text", { text: opts.reset ? `Put ${asset.title} back on the brand template.` : `Free-form design for ${asset.title}: ${opts.direction}`, attachments: [], ...(opts.author ? { author: opts.author } : {}) });
+  t.say("user", "text", { text: opts.reset ? `Put ${asset.title} back on the brand template.` : `Free-form design for ${asset.title}: ${opts.direction}`, attachments: [], ...(opts.author ? { author: opts.author } : {}), ...(opts.authorId ? { authorId: opts.authorId } : {}) });
 
   let content: AssetContent;
   let summary: string;

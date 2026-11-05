@@ -24,8 +24,17 @@ export interface OutgoingMessage {
   models?: ModelSettings;
   /** Shown next to the message in shared chats. */
   author?: string;
+  /** This browser's id, so a shared chat can tell whose message is whose even without names. */
+  authorId?: string;
   /** Asset types picked with the chips on the start screen. */
   assetTypes?: string[];
+}
+
+/** One id per browser (kept across tabs and reloads): marks which messages in a shared chat are this person's. */
+export function senderId(): string {
+  let id = localStorage.getItem("lloyd-sender");
+  if (!id) localStorage.setItem("lloyd-sender", (id = Math.random().toString(36).slice(2, 12)));
+  return id;
 }
 
 /** A per-tab id for presence: two tabs (or two people) on one campaign count as two viewers. */
@@ -77,7 +86,14 @@ export interface UploadResult {
 export async function uploadFiles(files: File[]): Promise<UploadResult[]> {
   const form = new FormData();
   files.forEach((f) => form.append("files", f));
-  const res = await fetch("/api/uploads", { method: "POST", body: form });
+  // A dead or restarting server must not leave files stuck on "Reading…" (that also blocks Send).
+  let res: Response;
+  try {
+    res = await fetch("/api/uploads", { method: "POST", body: form, signal: AbortSignal.timeout(120_000) });
+  } catch (e) {
+    const msg = (e as Error).name === "TimeoutError" ? "Upload timed out. Try again." : "Can't reach the server. Is it running?";
+    return files.map((f) => ({ ok: false, name: f.name, error: msg }));
+  }
   if (!res.ok) return files.map((f) => ({ ok: false, name: f.name, error: `Upload failed (${res.status})` }));
   return res.json() as Promise<UploadResult[]>;
 }

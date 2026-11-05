@@ -54,7 +54,8 @@ const within = (n: number, r?: { min?: number; max?: number }) => (r?.min === un
 
 function check(result: RunResult, e: Expect): Check[] {
   const checks: Check[] = [];
-  const nq = result.questions?.questions.length ?? 0;
+  // The brand-check follow-up ("do you still need any of these?") is not a clarifying question.
+  const nq = result.questions?.questions.filter((q) => q.id !== "brand_check").length ?? 0;
   if (e.questions) checks.push({ ok: within(nq, e.questions), label: `asks ${e.questions.min ?? 0}-${e.questions.max ?? "∞"} questions`, detail: `asked ${nq}` });
   const np = result.plan?.items.length ?? 0;
   if (e.planItems) checks.push({ ok: within(np, e.planItems), label: `plans ${e.planItems.min}-${e.planItems.max} assets`, detail: `planned ${np}` });

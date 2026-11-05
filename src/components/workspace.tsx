@@ -2,7 +2,7 @@
 
 import { Loader2, Menu, PanelLeftOpen, PanelRightOpen, Share2, SquarePen } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { getJSON, sendJSON, stopCampaign, streamMessage, tabId, usd } from "@/lib/client/api";
+import { getJSON, sendJSON, senderId, stopCampaign, streamMessage, tabId, usd } from "@/lib/client/api";
 import { useSettings } from "@/lib/client/settings";
 import { useAppearance } from "@/lib/client/theme";
 import type { BrandView, CampaignListItem, CampaignView } from "@/lib/client/types";
@@ -98,7 +98,7 @@ export function Workspace() {
       activeRef.current = id;
       setNotice(null);
       // Keep the open campaign in the address bar so the link can be shared or reloaded.
-      history.replaceState(null, "", id ? `/?c=${id}` : "/");
+      history.replaceState(null, "", id ? `/app?c=${id}` : "/app");
       setSelectedAsset(null);
       if (mobile) setSidebarOpen(false);
       if (!id) {
@@ -173,7 +173,7 @@ export function Workspace() {
       }
       setActiveId(id);
       activeRef.current = id;
-      history.replaceState(null, "", `/?c=${id}`);
+      history.replaceState(null, "", `/app?c=${id}`);
       await loadView(id).catch(() => null);
     }
     // During review an asset event means an edit: show that asset. While writing, keep the first.
@@ -182,9 +182,9 @@ export function Workspace() {
     setBusy(true);
     setNotice(null);
     setOwnRun({ steps: [], startedAt: Date.now(), author, mine: true });
-    setView((v) => (v ? { ...v, messages: [...v.messages, { id: `local-${Date.now()}`, role: "user", kind: "text", content: { text, attachments: [], ...(author ? { author } : {}) }, created_at: "" }] } : v));
+    setView((v) => (v ? { ...v, messages: [...v.messages, { id: `local-${Date.now()}`, role: "user", kind: "text", content: { text, attachments: [], authorId: senderId(), ...(author ? { author } : {}) }, created_at: "" }] } : v));
     try {
-      await streamMessage(id, { text, attachmentIds, models, author, assetTypes }, (e) => {
+      await streamMessage(id, { text, attachmentIds, models, author, authorId: senderId(), assetTypes }, (e) => {
         if (e.type === "status") setOwnRun((r) => (r && r.steps.at(-1)?.text !== e.text ? { ...r, steps: [...r.steps, { text: e.text, at: Date.now() }], live: "" } : r));
         if (e.type === "live") setOwnRun((r) => (r ? { ...r, live: e.text } : r));
         if (e.type === "draft") setDrafts((d) => ({ ...d, [e.assetId]: e.text }));

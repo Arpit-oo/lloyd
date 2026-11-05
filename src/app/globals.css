@@ -369,3 +369,53 @@ textarea {
     transition-duration: 0.01ms !important;
   }
 }
+
+/* Custom cursor: a dark arrow with a magenta edge; over anything clickable it turns magenta
+   with a small yellow dot. Plain CSS cursors (no JS, no lag); the system cursor is the fallback.
+   In the base layer so utilities like cursor-col-resize still win. */
+:root {
+  --cursor-arrow: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24'%3E%3Cpath d='M3 2.5 L3 19 L7.6 14.8 L10.7 21.5 L13.6 20.2 L10.6 13.6 L16.8 13.6 Z' fill='%23141016' stroke='%23ffffff' stroke-width='1.4' stroke-linejoin='round'/%3E%3Cpath d='M4.4 5.6 L4.4 15.6' stroke='%23d936c4' stroke-width='1.4' stroke-linecap='round'/%3E%3C/svg%3E") 3 2, auto;
+  --cursor-hand: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24'%3E%3Cpath d='M3 2.5 L3 19 L7.6 14.8 L10.7 21.5 L13.6 20.2 L10.6 13.6 L16.8 13.6 Z' fill='%23d936c4' stroke='%23ffffff' stroke-width='1.4' stroke-linejoin='round'/%3E%3Ccircle cx='18.5' cy='5.5' r='2.6' fill='%23f7c51e' stroke='%23141016' stroke-width='1'/%3E%3C/svg%3E") 3 2, pointer;
+}
+@layer base {
+  html {
+    cursor: var(--cursor-arrow);
+  }
+  a[href],
+  button:not(:disabled),
+  [role="button"],
+  [role="tab"],
+  [role="menuitem"],
+  [role="option"],
+  summary,
+  label[for],
+  select,
+  input[type="checkbox"],
+  input[type="radio"],
+  input[type="file"] {
+    cursor: var(--cursor-hand);
+  }
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="file"]):not([type="button"]):not([type="submit"]),
+  textarea,
+  [contenteditable="true"] {
+    cursor: text;
+  }
+  :disabled,
+  [aria-disabled="true"] {
+    cursor: not-allowed;
+  }
+}
+
+/* The landing page bee blinks now and then. */
+@keyframes bee-blink {
+  0%, 94%, 100% { transform: scaleY(1); }
+  96% { transform: scaleY(0.1); }
+}
+.bee-blink {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: bee-blink 5.5s infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .bee-blink { animation: none; }
+}

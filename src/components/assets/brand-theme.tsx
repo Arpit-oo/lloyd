@@ -92,9 +92,9 @@ export const radius = (c: BrandVars["corners"]) => ({ button: c === "sharp" ? 0 
 
 export function BrandTheme({ vars, children, className = "" }: { vars: BrandVars; children: React.ReactNode; className?: string }) {
   const families = [...new Set([vars.display, vars.body, vars.mono])].filter((f) => !/^(system-ui|ui-monospace|Georgia)$/.test(f));
-  const href = families.length
-    ? `https://fonts.googleapis.com/css2?${families.map((f) => `family=${encodeURIComponent(f).replace(/%20/g, "+")}:wght@400;500;600;700`).join("&")}&display=swap`
-    : null;
+  // One stylesheet per family: a font Google Fonts does not have (e.g. copied from a reference site)
+  // fails alone and falls back, instead of failing the whole request.
+  const hrefs = families.map((f) => `https://fonts.googleapis.com/css2?family=${encodeURIComponent(f).replace(/%20/g, "+")}:wght@400;500;600;700&display=swap`);
   return (
     <div
       data-preview-root
@@ -112,7 +112,7 @@ export function BrandTheme({ vars, children, className = "" }: { vars: BrandVars
         } as React.CSSProperties
       }
     >
-      {href && <link rel="stylesheet" href={href} />}
+      {hrefs.map((h) => <link key={h} rel="stylesheet" href={h} />)}
       {children}
     </div>
   );

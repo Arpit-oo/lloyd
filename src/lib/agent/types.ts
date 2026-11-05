@@ -73,6 +73,7 @@ export const QuestionsSchema = z.object({
       question: z.string(),
       why: z.string().describe("What in the plan changes depending on the answer."),
       options: z.array(z.string()).describe("2-4 short answer options."),
+      multi_select: z.boolean().describe("True when several options can sensibly be picked together (e.g. channels, asset types, audiences to cover); false when they are alternatives."),
       default: z.string().describe("The answer the agent will assume if the user says use defaults. Must be one of the options."),
     }),
   ),
@@ -128,6 +129,12 @@ export interface CampaignData {
   assetTypes?: import("./asset-types").AssetType[];
   /** An edit waiting for the marketer to confirm, because it goes against the brand (see confirm.ts). */
   pendingEdit?: import("./confirm").PendingEdit | null;
+  /** Design from remembered preferences (e.g. "sky-blue theme"); new web assets and emails start from it when no reference sets one. */
+  memoryStyle?: StyleRequest;
+  /** Documents attached to a new campaign with a question about them; used as the brief once the marketer says go. */
+  draftDocs?: string;
+  /** The same documents one by one, so the marketer can pick one when several separate briefs were attached. */
+  draftFiles?: { name: string; text: string }[];
   /** Brand voice/style exceptions the marketer confirmed for this campaign. Legal rules are never overridden. */
   voiceOverrides?: string[];
 }

@@ -10,10 +10,10 @@ Every feature Lloyd has, how to try it, and what a pass looks like. For setup se
 
 ```bash
 npm install
-npm run dev          # http://localhost:3000   (landing page: http://localhost:3000/lloyd)
+npm run dev          # landing page: http://localhost:3000   app: http://localhost:3000/app
 ```
 
-1. Open http://localhost:3000, press `Ctrl+,` and set your name.
+1. Open http://localhost:3000/app, press `Ctrl+,` and set your name.
 2. Optional, for memory tests: Sidebar → **Memory** → delete everything, so you start clean.
 3. Test briefs:
    - `wickhold-candidate-package/candidate/briefs/`: the three samples
@@ -47,13 +47,18 @@ Open it from Sidebar → **Brand**, or the Brand box → **What Lloyd knows abou
 | Feature | How to test | Passes if |
 |---|---|---|
 | **Brand check** before planning | Drag in `brief-3-regulated-teams-push.md` | A *Brand check* card refuses "FedRAMP Authorized" and the Vaskell Health story, quoting the legal docs, and says what it will say instead |
-| **Asks only when needed** | Sample brief 1 (detailed) vs brief 2 (vague) | Brief 1: no questions. Brief 2: 1–3 questions, each with a default |
+| **Asks only when needed** | Sample brief 1 (detailed) vs brief 2 (vague) | Brief 1: no clarifying questions (only the brand-check one if something was flagged). Brief 2: 1–3 questions, each with a default |
 | **Asks when the angle is gone** | `fixtures/test-briefs/t3-breach-hook-rushed.md` | Refuses the breach hook and asks what to lead with instead |
 | **Asks when stakeholders disagree** | `t2-leashgate-forward-chain.md` | Asks who the audience is (CISOs or platform engineers) |
-| **Use suggested answers** | On any *Questions* card | One click accepts all defaults and moves on |
+| **One send button** | On any *Questions* card | With nothing picked it reads *Use suggested answers*; pick or type some and it reads *Send answers (n suggested)*: blanks use the suggestion |
+| **Change your mind / own answer** | Click a picked option again; or type in *Or type your own answer* | The option un-picks; your typed answer is sent for that question |
+| **Push back on the brand check** | `mock-2-trap-webinar.md` | Besides the *Brand check* card, the Questions card asks *Do you still need any of them?* Default keeps the alternatives; pick e.g. "SOC 2" and the plan keeps it in approved wording and says how in *Why this mix* |
+| **Chat isn't a brief** | New campaign: `hi sup`, then `before that, how are you` | Friendly replies, no questions card; a vague real request (`awareness push for Quenchline`) still starts planning |
+| **Multi-select questions** | Sample brief 2 or `mock-1-vague-quenchline.md` | A question like "Which channels?" says *Pick one or more* and lets you select several options |
 | **Plan with reasons** | Any brief | Each asset has audience, angle, key points, call to action and a reason, plus a cost and time estimate |
 | **Only the five asset types** | `t4-kubecon-vague.txt` asks for a video and paid ads | Plan contains only posts, blogs, landing pages and emails, and says why |
 | **Adjust the plan** | ✕ an item, or type `add an X post for platform engineers` | The plan updates. Nothing is written until **Approve and write** |
+| **Guard rail on plan changes** | In plan review: `add an X post with some emojis and a reference to Napoleon` | A "goes against the brand" card quotes the content style guide ("No emoji in brand posts or email") and waits for *Yes / Only where allowed / Cancel* |
 | **Asset chips** | On the start screen, click e.g. *Email* before sending a brief | The first plan contains only emails |
 | **Parallel writing with live text** | Approve a plan | Assets appear on the right as they're written; the live checklist streams the model's words |
 | **Web research** | A brief that needs a fresh third-party statistic | Asset's **Sources** tab lists web sources; nothing unsourced is used |
@@ -62,7 +67,14 @@ Open it from Sidebar → **Brand**, or the Brand box → **What Lloyd knows abou
 | **Reload safety** | Reload the page mid-run | The run carries on and the progress comes back |
 | **Attachments as the brief** | Attach a PDF, Word, PowerPoint, Markdown or `.txt` file | Read as the brief (try `fixtures/mock-briefs/*.pdf`) |
 | **Reference links and images** | `One landing page for security engineers. Make it look and read like https://linear.app` | Steps show "Reading the reference link"; the page takes on that style, with no copied claims |
-| **Small talk** | Type `hi` in a new campaign | Instant reply explaining what Lloyd does; no model call |
+| **Copy a site's look in review** | On a written landing page: `make it look like magihq.com` | Asks first (off-brand colours and fonts); *Yes, do it anyway* applies the site's real fonts and colours, measured from its CSS (MagiHQ: DM Sans, #0a0a0a on #faf9f5, red #fb2c36), plus its spacing and hero layout |
+| **Small talk** | Type `hi` or `Hi, what can you do?` in a new campaign | Instant reply explaining what Lloyd does; no model call |
+| **Chat after the campaign** | When the assets are written, send `thanks`, `how's your day` or `what makes a good tweet hook?` | A real answer to what you said, not "How can I help with your campaign?" |
+| **Plain punctuation** | Any written asset, edit or Lloyd chat reply | No em dashes anywhere; posts read like a person wrote them, never a note about missing facts |
+| **Brief after small talk** | Say `hi` first, then attach a brief with `here` | The attachment is read as the brief (it never says it can't see it) |
+| **Several briefs at once** | Attach the three files in `fixtures/mock-briefs/` with `here are the briefs` | Lloyd lists them and asks which one this campaign is for; `use mock-1` or `the first one` starts it, `one campaign` combines them |
+| **Brief replaced before writing** | While questions or the plan are showing, attach a different brief: `use this brief instead` | Starts over from the new brief: new brand check, questions and plan |
+| **Ask about an attachment** | New campaign: attach a brief and type `what does this say?` | Lloyd summarises the document instead of starting a campaign, and offers to plan. Type `go` and the same document is used as the brief |
 
 ---
 
@@ -78,9 +90,11 @@ Open it from Sidebar → **Brand**, or the Brand box → **What Lloyd knows abou
 | **Ambiguous edits** | With two emails, type `shorten the email` | Lloyd asks which one rather than guessing |
 | **Refuses forbidden edits** | `Say we are FedRAMP certified` | Refused or reworded; Checks flags it |
 | **Guard rail for off-brand edits** | `make every post gen z slang and add monkeys` | A "goes against the brand" card names the rules; nothing changes until you pick *Yes, do it anyway*, *Only where the brand allows* or *Cancel, leave it as is* |
-| **Design edits** | On a landing page: `make it feel more premium`, then `use electric purple`, then `go back to brand design` | Spacing, fonts and colours change; off-brand values get a yellow warning; brand look comes back |
+| **Design edits** | On a landing page: `make it feel more premium`, then `go back to brand design` | Spacing, fonts and colours change; the brand look comes back |
+| **Off-brand design asks first** | `change the email buttons and colours, use a sky blue theme` | A confirm card says sky blue isn't in the palette and names the closest brand colour; nothing changes until you choose. Brand colours go straight through |
 | **Section edits** | `Move the FAQ above the features`, `turn the features into numbered steps` | Sections reorder or change layout |
 | **Free-form design** | Asset toolbar → **Free-form design** | Brand warning first; *Yes, continue* → AI-written page in a sandbox with a yellow banner; **Back to template** undoes it |
+| **Free-form like a site** | Free-form design → `make it look like magihq.com` (type freely, Space included) | The page uses that site's fonts and colours and its layout style |
 | **Updated badge, closing tabs** | Edit an asset, then ✕ a tab | Tabs show *updated*; closed tabs go under *Closed (n)* |
 | **Copy and download** | Asset toolbar → Copy, `.md` | Text comes out clean |
 
@@ -96,6 +110,8 @@ The full list of things chat can change is in [§9](#9-reference-what-chat-edits
 | **Nothing kept without you** | Click *Forget* on one, *Keep* on another | Only the kept one appears in Memory |
 | **Carries over** | `Ctrl+K` → **New campaign** → another brief | The Questions card says it's using what it remembers; LinkedIn posts come out short with no hashtags |
 | **See and change memory** | Sidebar → **Memory** | Add, edit, pin and delete all work |
+| **"Remember this" at any time** | Mid-campaign (or in a new one): `remember that I like a sky-blue theme and small catchy buttons` | A *Saved to memory* card lists what was saved, with Forget; it appears in Memory at once and applies to every later campaign of this brand |
+| **Remembered design applies** | After the step above, start a new campaign with emails or a landing page | They start in the remembered colours (flagged off-brand if they are) |
 | **Brief overrides are never remembered** | Run sample brief 1 (makes Leashgate GA "for these assets"), finish it | "Leashgate is GA" is not proposed as a memory |
 
 ---
@@ -118,6 +134,7 @@ The full list of things chat can change is in [§9](#9-reference-what-chat-edits
 | Feature | How to test | Passes if |
 |---|---|---|
 | **Switch brand** | Click the **Brand** box at the top of the sidebar → pick a brand | Page reloads into that brand's own campaigns and memory |
+| **Brand names are unique** | **Add a new brand…** → type the name of a brand you already have (any case, e.g. `wickhold`) | Red note under the name, the Add button stays off; the server refuses it too |
 | **Add a brand from the browser** | Brand box → **Add a new brand…** → name it → drop `fixtures/mini-brand` → **Add brand and switch to it** | Indexing runs once (a few minutes, ~$1–3), then the brand is live. No Wickhold rules leak into it |
 | **Use a folder on disk** | Brand → **Switch brand** → "Or use a folder already on this machine" | Paste a path; nothing is copied |
 | **Quick switcher** | `Ctrl+K` | One search box over campaigns and brands; arrow keys and Enter |
@@ -126,7 +143,10 @@ The full list of things chat can change is in [§9](#9-reference-what-chat-edits
 | **Themes** | `/theme` or Settings → Appearance | Magi, Magi Dark, Classic Paper and Night, System, animated wallpapers. All readable |
 | **Shortcuts** | `Ctrl+Shift+O` new campaign, `Ctrl+B` sidebar, `/` focus input, `Esc` close a panel | Each works |
 | **Phones** | Narrow the window below 768px | Sidebar becomes a drawer; assets open full screen |
-| **Landing page** | http://localhost:3000/lloyd, also on a phone width | Renders in light and dark; phone menu opens and closes; **Start a campaign** opens the app |
+| **Layer stack** | Landing page → **Built in layers**; point at each layer or its text | That slab lifts and lights up with its text; left alone, it steps through the five layers by itself |
+| **Watching bee** | Move the pointer around the landing page | The bee above the headline follows it with its eyes and blinks now and then |
+| **Cursor** | Anywhere in the site and the app | Dark arrow with a magenta edge; over buttons and links it turns magenta; text fields still show the text cursor; the panel resize handle still shows the resize cursor |
+| **Landing page** | http://localhost:3000, also on a phone width | Renders the same in any app theme; phone menu opens and closes; **Start a campaign** opens the app at `/app`. Old links still work: `/lloyd` goes to `/`, and `/?c=<id>` goes to `/app?c=<id>` |
 
 ---
 
@@ -135,6 +155,7 @@ The full list of things chat can change is in [§9](#9-reference-what-chat-edits
 | Feature | How to test | Passes if |
 |---|---|---|
 | **Shared chat** | **Share** → copy link → open in an Incognito window with another name | Avatars appear within ~3 s; messages show who sent them; live steps stream to both |
+| **Who sent what** | Open the link in Incognito **without** setting a name and send "hi" | Both windows label every message: "Guest" for the Incognito one, "Bella (you)" for your own. Your messages never look like the guest's |
 | **One run at a time** | Window B sends while A's run is going | B is told to wait; it works once A's run finishes |
 | **Export** | Share window → Markdown, Copy as Markdown, JSON | The `.md` holds the conversation, brand check, plan and every asset |
 
@@ -163,7 +184,7 @@ npm run brief -- fixtures/test-briefs/t1-eu-push-slack-dump.md --answers "use de
 ### Automated checks
 
 ```bash
-npm test             # unit tests (chunking, conflicts, loaders, diff, streaming JSON, design settings, small talk)
+npm test             # unit tests (chunking, conflicts, loaders, diff, streaming JSON, design settings, small talk, punctuation)
 npm run typecheck    # TypeScript
 npm run lint         # ESLint
 npm run eval         # agent behaviour on 3 briefs + memory (~$1.80, a few minutes); report in evals/last-report.md
@@ -200,7 +221,7 @@ npm run test:keys    # checks the OpenAI and Firecrawl keys work
 
 **Guard rail details:** before any edit, Lloyd checks the request against the brand's voice rules and the campaign's constraints, and flags things unusual for a brand (slang, memes, mascots that aren't the brand's, profanity, mocking competitors). *Yes, do it anyway* stores the exception on the campaign, so the writer, editor and checks all honour it. Legal rules, forbidden claims, product names and facts never bend. Typing anything else drops the question.
 
-**References:** links are read once (text and a screenshot); images are described by vision; documents are read as writing examples. On a new campaign, attached documents are the brief, and images and links are always references.
+**References:** links are read once (text, a screenshot, and the fonts and colours its CSS uses); images are described by vision; documents are read as writing examples. On a new campaign, attached documents are the brief, and images and links are always references.
 
 ### Adding brands
 
@@ -266,7 +287,7 @@ src/lib/llm/       the only path to the model: model tiers, caching, spend cap, 
 src/lib/memory/    memory store and end-of-campaign extraction
 src/components/    chat, asset previews, panels (brand, memory, inspector, settings, share), themes
 src/app/api/       routes: campaigns, messages (streaming), export, share, assets, brand, memories, uploads
-src/app/lloyd/     the landing page
+src/app/page.tsx   the landing page (/); the app is src/app/app/page.tsx (/app); landing components in src/components/landing/
 fixtures/          mock briefs, messy test briefs with answer key, a second brand
 evals/             expected behaviour per brief
 data/              campaigns, messages, assets, memory and call log (SQLite)

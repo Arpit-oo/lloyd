@@ -20,5 +20,5 @@ export const listBrands = () => getJSON<BrandList>("/api/brands");
  */
 export async function switchBrand(dir: string) {
   await sendJSON("/api/brands", "POST", { dir });
-  window.location.href = new URL("/", window.location.origin).href;
+  window.location.href = new URL("/app", window.location.origin).href;
 }

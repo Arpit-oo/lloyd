@@ -3,6 +3,7 @@
 import { Check, FolderOpen, FolderPlus, Loader2, Upload } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { getJSON } from "@/lib/client/api";
+import { brandNameKey } from "@/lib/brand/name-key";
 import { switchBrand } from "@/lib/client/brands";
 import { droppedFiles, pickedFiles, type PickedFile } from "@/lib/client/folder";
 
@@ -62,7 +63,7 @@ export function BrandSwitcher() {
         Lloyd works on one brand at a time. Campaigns and memory are kept separately for each brand, so switching never mixes them. A brand folder that hasn&apos;t been indexed yet is indexed once (a few minutes, about $1–3 for a large folder).
       </p>
 
-      <AddBrand busy={!!busy} onAdded={use} />
+      <AddBrand busy={!!busy} onAdded={use} taken={(data?.options ?? []).flatMap((o) => [o.name, o.dir.split(/[\\/]/).pop() ?? ""])} />
 
       <div>
         <div className="mb-2 text-[13.5px] font-medium">Brands</div>
@@ -118,7 +119,7 @@ export function BrandSwitcher() {
 }
 
 /** Add a new brand: name it, drop or pick its folder, and Lloyd copies it in and switches to it. */
-function AddBrand({ busy, onAdded }: { busy: boolean; onAdded: (dir: string) => Promise<void> }) {
+function AddBrand({ busy, onAdded, taken }: { busy: boolean; onAdded: (dir: string) => Promise<void>; taken: string[] }) {
   const [name, setName] = useState("");
   const [files, setFiles] = useState<PickedFile[]>([]);
   const [over, setOver] = useState(false);
@@ -136,12 +137,13 @@ function AddBrand({ busy, onAdded }: { busy: boolean; onAdded: (dir: string) => 
   const docs = files.filter((f) => DOC_EXT.test(f.path)).length;
   const images = files.filter((f) => /\.(png|jpe?g|webp|gif|svg)$/i.test(f.path)).length;
   const mb = files.reduce((s, f) => s + f.file.size, 0) / 1048576;
+  const clash = name.trim() ? taken.find((t) => brandNameKey(t) === brandNameKey(name)) : undefined;
 
   const add = async () => {
     setUploading(true);
     setError(null);
     try {
-      const dir = await uploadBrand(name.trim() || "brand", files);
+      const dir = await uploadBrand(name.trim(), files);
       await onAdded(dir);
     } catch (e) {
       setError((e as Error).message);
@@ -160,7 +162,8 @@ function AddBrand({ busy, onAdded }: { busy: boolean; onAdded: (dir: string) => 
 
       <div>
         <label htmlFor="new-brand-name" className="mb-1.5 block text-[13px] font-medium">Brand name</label>
-        <input id="new-brand-name" value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Acme Robotics" className="w-full rounded-lg border border-line bg-paper px-3 py-2 text-[14px] outline-none focus:border-line-strong" />
+        <input id="new-brand-name" value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Acme Robotics" aria-invalid={!!clash} aria-describedby={clash ? "new-brand-clash" : undefined} className={`w-full rounded-lg border bg-paper px-3 py-2 text-[14px] outline-none ${clash ? "border-bad" : "border-line focus:border-line-strong"}`} />
+        {clash && <p id="new-brand-clash" className="mt-1.5 text-[13px] text-bad">There is already a brand called &ldquo;{clash}&rdquo;. Pick another name, or switch to it above.</p>}
       </div>
 
       <div
@@ -202,7 +205,7 @@ function AddBrand({ busy, onAdded }: { busy: boolean; onAdded: (dir: string) => 
       </div>
 
       <div className="flex items-center gap-3">
-        <button onClick={add} disabled={!docs || uploading || busy} className="flex items-center gap-1.5 rounded-lg bg-ink px-4 py-2 text-[13.5px] font-semibold text-on-ink disabled:opacity-40">
+        <button onClick={add} disabled={!docs || !name.trim() || !!clash || uploading || busy} className="flex items-center gap-1.5 rounded-lg bg-ink px-4 py-2 text-[13.5px] font-semibold text-on-ink disabled:opacity-40">
           {uploading && <Loader2 size={14} className="animate-spin" />} {uploading ? "Adding…" : "Add brand and switch to it"}
         </button>
         <span className="text-[12.5px] text-muted">Your current brand and its campaigns stay; switch back any time.</span>

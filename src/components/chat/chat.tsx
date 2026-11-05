@@ -1,8 +1,8 @@
 "use client";
 
 import { ArrowDown, FileText, RotateCcw } from "lucide-react";
-import { useCallback, useEffect, useRef, useState } from "react";
-import { getJSON, usd } from "@/lib/client/api";
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { getJSON, senderId, usd } from "@/lib/client/api";
 import type { CampaignView } from "@/lib/client/types";
 import type { ModelSettings } from "@/lib/llm/catalog";
 import type { Appearance } from "@/lib/client/theme";
@@ -11,6 +11,9 @@ import { Bee } from "../brand/bee";
 import { Composer } from "./composer";
 import { MessageCard } from "./message-cards";
 import { RunLog, RunSteps, type LiveRun } from "./run-steps";
+
+/** senderId never changes while the page is open, so there is nothing to subscribe to. */
+const noSubscribe = () => () => {};
 
 const PLACEHOLDER: Record<string, string> = {
   new: "Paste a brief, attach a brief file, or describe the campaign…",
@@ -49,6 +52,8 @@ export function Chat({ view, busy, run, notice, onSend, onStop, onOpenAsset, mod
   const scroller = useRef<HTMLDivElement>(null);
   const [atBottom, setAtBottom] = useState(true);
   const messages = view?.messages ?? [];
+  // This browser's id; empty during the server render, so both renders agree.
+  const meId = useSyncExternalStore(noSubscribe, senderId, () => "");
   const state = view?.campaign.state ?? "new";
   const turnCost = view?.turnCost ?? {};
 
@@ -106,6 +111,15 @@ export function Chat({ view, busy, run, notice, onSend, onStop, onOpenAsset, mod
   const lastInteractive = [...messages].reverse().find((m) => m.role === "assistant" && (m.kind === "questions" || m.kind === "plan"))?.id;
   const lastMessage = messages[messages.length - 1];
   const lastUser = [...messages].reverse().find((m) => m.role === "user");
+  // Shared chat: once anyone else has sent a message (or is here), every message shows who sent it.
+  const myName = prefs.name.trim();
+  const isMine = (c: { author?: string; authorId?: string }) => (c.authorId ? c.authorId === meId : !c.author || c.author === myName);
+  const shared = (view?.viewers?.length ?? 0) > 1 || messages.some((m) => m.role === "user" && !isMine(m.content as { author?: string; authorId?: string }));
+  const senderLabel = (m: (typeof messages)[number]) => {
+    if (!shared || m.role !== "user") return undefined;
+    const c = m.content as { author?: string; authorId?: string };
+    return isMine(c) ? `${myName || "Guest"} (you)` : c.author?.trim() || "Guest";
+  };
   const stalled = !busy && state === "new" && messages.some((m) => m.role === "assistant" && m.kind !== "text");
 
   return (
@@ -125,7 +139,7 @@ export function Chat({ view, busy, run, notice, onSend, onStop, onOpenAsset, mod
             const failed = m.kind === "text" && m.role === "assistant" && String((m.content as { text?: string }).text ?? "").startsWith("Something went wrong");
             return (
               <div key={m.id} className={i >= messages.length - 2 ? "settle" : undefined}>
-                <MessageCard m={m} me={prefs.name} live={!busy && (m.kind === "confirm" ? m.id === lastMessage?.id : m.id === lastInteractive && (state === "clarifying" || state === "plan_review"))} onReply={(t) => send(t, [])} onOpenAsset={onOpenAsset} estimate={view?.estimate ?? null} />
+                <MessageCard m={m} me={prefs.name} sender={senderLabel(m)} live={!busy && (m.kind === "confirm" ? m.id === lastMessage?.id : m.id === lastInteractive && (state === "clarifying" || state === "plan_review"))} onReply={(t) => send(t, [])} onOpenAsset={onOpenAsset} estimate={view?.estimate ?? null} />
                 {(m.content as { runLog?: Parameters<typeof RunLog>[0]["log"] }).runLog && <RunLog log={(m.content as { runLog: Parameters<typeof RunLog>[0]["log"] }).runLog} />}
                 <MessageFooter
                   text={m.role === "assistant" && m.kind === "text" ? String((m.content as { text?: string }).text ?? "") : null}

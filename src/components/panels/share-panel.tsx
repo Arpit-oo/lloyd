@@ -26,7 +26,7 @@ export function SharePanel({ campaignId, title, name, setName, viewers, myTab, o
   }, []);
 
   const here = typeof window !== "undefined" && !/^(localhost|127\.)/.test(location.hostname) ? [location.origin] : [];
-  const links = [...new Set([...here, ...(addrs?.lan ?? [])])].map((o) => `${o}/?c=${campaignId}`);
+  const links = [...new Set([...here, ...(addrs?.lan ?? [])])].map((o) => `${o}/app?c=${campaignId}`);
   const exportUrl = (format: "md" | "json") => `/api/campaigns/${campaignId}/export?format=${format}`;
 
   return (

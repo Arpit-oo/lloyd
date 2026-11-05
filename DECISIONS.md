@@ -46,7 +46,7 @@ Assets are structured (headline, sections, blocks) and drawn by templates in the
 - **Keeps** how this marketer works and writes (corrections, repeated preferences) and decisions on questions the docs left open.
 - **Forgets** anything campaign-specific, anything the docs already say, and every brief override.
 
-Memories are *proposed* at the end of a campaign with a justifying quote; none is active until kept, and all are editable in the Memory panel. All active memories (capped at 25) go into the campaign block: at that scale this is cheaper and more predictable than retrieval. Campaigns can also be shared on the local network, with one run at a time enforced server-side.
+Memories are *proposed* at the end of a campaign with a justifying quote; none is active until kept, and all are editable in the Memory panel. Saying "remember …" at any point saves it at once (the marketer asked, so there is nothing to approve), and remembered design preferences become the starting design of new web assets and emails. All active memories (capped at 25) go into the campaign block: at that scale this is cheaper and more predictable than retrieval. Campaigns can also be shared on the local network, with one run at a time enforced server-side.
 
 ## 6. Models and cost
 

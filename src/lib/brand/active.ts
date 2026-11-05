@@ -1,4 +1,5 @@
 import path from "node:path";
+import { brandNameKey } from "./name-key";
 
 // config.ts reads the active brand, and config.ts is reachable from client code (the model
 // catalog), so node:fs is loaded lazily on the server instead of imported at the top.
@@ -73,4 +74,14 @@ export function uploadedBrands(dataDir: string): { dir: string; name: string; la
   } catch {
     return [];
   }
+}
+
+
+/** The saved name (or folder) a new brand name clashes with, if any. */
+export function brandNameTaken(dataDir: string, name: string): string | null {
+  const key = brandNameKey(name);
+  if (!key) return null;
+  const known = readBrandState(dataDir).known.filter((k) => fs().existsSync(k.dir));
+  const names = [...known.map((k) => k.name), ...known.map((k) => path.basename(k.dir)), ...uploadedBrands(dataDir).map((b) => b.name)];
+  return names.find((n) => n.trim() && brandNameKey(n) === key) ?? null;
 }

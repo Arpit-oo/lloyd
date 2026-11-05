@@ -9,7 +9,7 @@ import type { CampaignState, Plan } from "../types";
  * references like "the second post" or "the security email" to concrete asset ids.
  * Ambiguous references are not guessed: the router asks.
  */
-export const ACTIONS = ["answer_questions", "use_defaults", "revise_plan", "approve_plan", "edit_assets", "undo_edit", "finish_campaign", "chat"] as const;
+export const ACTIONS = ["answer_questions", "use_defaults", "revise_plan", "approve_plan", "edit_assets", "undo_edit", "finish_campaign", "remember", "new_brief", "chat"] as const;
 export type Action = (typeof ACTIONS)[number];
 
 const RouteSchema = z.object({
@@ -22,15 +22,15 @@ const RouteSchema = z.object({
 export type Route = z.infer<typeof RouteSchema>;
 
 const ALLOWED: Record<CampaignState, Action[]> = {
-  new: ["chat"],
-  clarifying: ["answer_questions", "use_defaults", "chat"],
-  plan_review: ["revise_plan", "approve_plan", "chat"],
-  writing: ["chat"],
-  review: ["edit_assets", "undo_edit", "revise_plan", "finish_campaign", "chat"],
+  new: ["remember", "chat"],
+  clarifying: ["answer_questions", "use_defaults", "new_brief", "remember", "chat"],
+  plan_review: ["revise_plan", "approve_plan", "new_brief", "remember", "chat"],
+  writing: ["remember", "chat"],
+  review: ["edit_assets", "undo_edit", "revise_plan", "finish_campaign", "remember", "chat"],
 };
 
 export async function routeMessage(
-  input: { state: CampaignState; message: string; plan?: Plan; assets: AssetRow[]; recent: string },
+  input: { state: CampaignState; message: string; plan?: Plan; assets: AssetRow[]; recent: string; brief?: string; attachments?: { name: string; text: string }[] },
   ctx: CallContext,
 ): Promise<Route> {
   const assetList = input.assets.length
@@ -47,8 +47,11 @@ Allowed actions in the current state: ${ALLOWED[input.state].join(", ")}.
 - revise_plan: change the asset plan (add, drop, change an asset). approve_plan: they approve the plan / say go / write it.
 - edit_assets: change the content of one or more written assets. Resolve ordinal references ("second post" = second asset of that kind in list order; "the email" when there are several is ambiguous).
 - undo_edit: revert the last edit. finish_campaign: they are done with this campaign.
-- chat: a question or comment; answer it in reply, briefly.` }],
-    input: `State: ${input.state}\n\nAssets:\n${assetList}\n\nRecent conversation:\n${input.recent}\n\nNew message:\n"${input.message}"`,
+- remember: they ask you to remember, save or always use something for future campaigns ("remember this", "from now on", "always use…", "keep this for next time"). Never claim in a chat reply that you will remember something; that is this action.
+- new_brief: they are giving the campaign brief now, pasted into the message or attached to it ("here is the brief", "use this brief instead", "start over with this"). Use it when the brief on file is not a real brief (a greeting or a question) and this message contains or attaches one, or when they ask to replace the brief.
+- chat: a question or comment; answer it in reply, briefly. Answer questions about the brief, the plan or the assets from the material below; never ask the marketer to share something that is already there. Files attached to the new message are listed with it: never say you cannot see a listed attachment.
+Chat replies: answer what they actually said, like a helpful colleague. Thanks or small talk gets a short friendly reply; a general marketing or writing question gets a real answer; an opinion gets a view. Don't fall back to "How can I help with your campaign?". When the assets are written (state review), you can mention one concrete next step if it fits (edit an asset, share or export the chat). If they paste or ask for a whole new campaign, say the New campaign button (top of the sidebar) starts one, so this one stays as it is. Plain words, no em dashes.` }],
+    input: `State: ${input.state}\n\n${input.brief ? `Campaign brief (as the marketer sent it):\n"""\n${input.brief.slice(0, 6000)}\n"""\n\n` : ""}${input.attachments?.length ? `Files attached to the new message:\n${input.attachments.map((a) => `--- ${a.name} ---\n${a.text.slice(0, 1500)}`).join("\n\n")}\n\n` : ""}Assets:\n${assetList}\n\nRecent conversation:\n${input.recent}\n\nNew message:\n"${input.message}"`,
     schema: RouteSchema,
     schemaName: "route",
     ctx,

@@ -15,6 +15,12 @@ const nextConfig: NextConfig = {
   // No Next.js badge in the corner during development; compile and runtime errors still show.
   devIndicators: false,
   allowedDevOrigins: lanHosts,
+  // The landing page is at /, the app at /app. Old links keep working: /lloyd was the landing
+  // page, and shared campaign links used to be /?c=<id>.
+  redirects: async () => [
+    { source: "/lloyd", destination: "/", permanent: false },
+    { source: "/", has: [{ type: "query", key: "c" }], destination: "/app", permanent: false },
+  ],
   turbopack: {
     rules: {
       "*.css": {

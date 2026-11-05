@@ -9,6 +9,8 @@ export const CONFIRM_REPLIES = {
 } as const;
 
 export interface PendingEdit {
+  /** What is waiting: an edit to written assets (default) or a change to the plan. */
+  kind?: "edit" | "plan";
   instruction: string;
   assetIds: string[];
   conflicts: { rule: string; source_doc: string | null; affects: string[] }[];

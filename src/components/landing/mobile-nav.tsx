@@ -22,7 +22,7 @@ export function MobileNav({ links }: { links: readonly (readonly [string, string
 
   return (
     <details ref={ref} className="md:hidden">
-      <summary aria-label="Menu" className="flex h-11 w-11 cursor-pointer list-none items-center justify-center rounded-full hover:bg-ink/5 [&::-webkit-details-marker]:hidden">
+      <summary aria-label="Menu" className="flex h-11 w-11 cursor-(--cursor-hand) list-none items-center justify-center rounded-full hover:bg-ink/5 [&::-webkit-details-marker]:hidden">
         <Menu size={20} />
       </summary>
       <ul className="absolute inset-x-4 top-full mt-2 rounded-2xl border border-line bg-surface p-2 text-[15px] shadow-float">
@@ -32,7 +32,7 @@ export function MobileNav({ links }: { links: readonly (readonly [string, string
           </li>
         ))}
         <li>
-          <Link href="/" className="flex min-h-11 items-center rounded-xl px-4 hover:bg-ink/5">Open the app</Link>
+          <Link href="/app" className="flex min-h-11 items-center rounded-xl px-4 hover:bg-ink/5">Open the app</Link>
         </li>
       </ul>
     </details>

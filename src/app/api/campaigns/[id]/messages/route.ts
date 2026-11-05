@@ -14,7 +14,7 @@ import { json, sseResponse } from "@/lib/http/sse";
  */
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const body = (await req.json()) as { text?: string; attachmentIds?: string[]; models?: ModelSettings; author?: string; tab?: string; assetTypes?: AssetType[] };
+  const body = (await req.json()) as { text?: string; attachmentIds?: string[]; models?: ModelSettings; author?: string; authorId?: string; tab?: string; assetTypes?: AssetType[] };
   const text = (body.text ?? "").trim();
   const author = (body.author ?? "").trim().slice(0, 40);
   if (!text && !body.attachmentIds?.length) return json({ error: "Message is empty" }, 400);
@@ -33,7 +33,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
           recordRunEvent(id, e as { type: string; text?: string; assetId?: string });
           send(e);
         },
-        { signal: ctrl.signal, attachmentIds: body.attachmentIds, models: body.models, author, assetTypes: body.assetTypes },
+        { signal: ctrl.signal, attachmentIds: body.attachmentIds, models: body.models, author, authorId: typeof body.authorId === "string" ? body.authorId.slice(0, 24) : undefined, assetTypes: body.assetTypes },
       );
     } finally {
       const info = runInfo(id);

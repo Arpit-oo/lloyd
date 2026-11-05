@@ -11,7 +11,7 @@ import { json } from "@/lib/http/sse";
  */
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const body = (await req.json()) as { direction?: string; reset?: boolean; confirmed?: boolean; author?: string; tab?: string };
+  const body = (await req.json()) as { direction?: string; reset?: boolean; confirmed?: boolean; author?: string; authorId?: string; tab?: string };
   const asset = getAsset(id);
   if (!asset) return json({ error: "Not found" }, 404);
   const reset = !!body.reset;
@@ -27,7 +27,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   const author = (body.author ?? "").trim().slice(0, 40);
   const ctrl = startRun(asset.campaign_id, author, (body.tab ?? "").slice(0, 20));
   try {
-    await applyFreeform(asset.campaign_id, id, { direction, reset, author }, (e) => recordRunEvent(asset.campaign_id, e as { type: string; text?: string; assetId?: string }), ctrl.signal);
+    await applyFreeform(asset.campaign_id, id, { direction, reset, author, authorId: typeof body.authorId === "string" ? body.authorId.slice(0, 24) : undefined }, (e) => recordRunEvent(asset.campaign_id, e as { type: string; text?: string; assetId?: string }), ctrl.signal);
     return json({ ok: true });
   } catch (err) {
     return json({ error: (err as Error).message }, 500);

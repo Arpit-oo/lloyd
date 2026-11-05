@@ -204,7 +204,7 @@ function LandingSection({ section: s, vars, alt, dark }: { section: z.infer<type
         <div className={`mt-6 divide-y border-y ${rule} ${dark ? "divide-white/15" : "divide-black/10"}`}>
           {s.items.map((it, j) => (
             <details key={j} className="group py-4" open={j === 0}>
-              <summary className="flex cursor-pointer list-none items-center justify-between font-semibold">
+              <summary className="flex cursor-(--cursor-hand) list-none items-center justify-between font-semibold">
                 {it.title}
                 <ChevronDown size={18} className="transition group-open:rotate-180" />
               </summary>

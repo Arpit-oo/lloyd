@@ -37,7 +37,7 @@ export const LinkedInSchema = z.object({
 export const XSchema = z.object({
   handle: z.string().describe("Account handle, e.g. @brand. Use the brand's handle if known, else a plausible one from the brand name."),
   display_name: z.string(),
-  posts: z.array(z.object({ text: z.string().describe("Max 280 characters.") })).describe("One post, or a short thread."),
+  posts: z.array(z.object({ text: z.string().describe("Max 280 characters. One idea, in plain words a person would actually post. No bullet lists, no em dashes, no notes to the marketer.") })).describe("One post, or a short thread (2 to 5 posts). The first post is the hook and must make sense on its own; the last one lands the point or the call to action."),
   image: ImageRef,
 });
 
