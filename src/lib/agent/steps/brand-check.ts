@@ -1,5 +1,5 @@
 import type { Brand } from "@/lib/brand";
-import { searchBrand, searchFacts } from "@/lib/brand/retrieve";
+import { searchBrandMany, searchFactsMany } from "@/lib/brand/retrieve";
 import { llm, type CallContext } from "@/lib/llm/client";
 import { brandBlock } from "../context";
 import { BrandCheckSchema, type BrandCheckItem, type StructuredBrief } from "../types";
@@ -54,20 +54,21 @@ export async function checkBrief(brand: Brand, brief: StructuredBrief, ctx: Call
     }));
   if (!items.length) return outOfScope;
 
-  const evidence = await Promise.all(
-    items.map(async (item) => {
-      const strategic = item.startsWith("strategy:");
-      const [facts, chunks] = await Promise.all([
-        searchFacts(brand.db, item, 8, ctx),
-        // A strategy is judged against who the brand sells to and how it positions itself,
-        // not only against legal rules.
-        strategic
-          ? searchBrand(brand.db, item, { docTypes: ["persona", "messaging", "brand_guidelines", "legal_claims"], limit: 5 }, ctx)
-          : searchBrand(brand.db, item, { maxTier: 2, limit: 3 }, ctx),
-      ]);
-      return `## Requested: ${item}\nFacts:\n${facts.map((f) => `- [${f.docId}, tier ${f.tier}] ${f.statement} | quote: "${f.quote}"`).join("\n")}\nPassages:\n${chunks.map((c) => `[${c.docId} | ${c.headingPath} | tier ${c.tier}]\n${c.text.slice(0, 1800)}`).join("\n\n")}`;
-    }),
-  );
+  // One batched search per kind of evidence instead of two calls per item.
+  const strategies = items.filter((i) => i.startsWith("strategy:"));
+  const claims = items.filter((i) => !i.startsWith("strategy:"));
+  const [factsPerItem, strategyChunks, claimChunks] = await Promise.all([
+    searchFactsMany(brand.db, items, 8, ctx),
+    // A strategy is judged against who the brand sells to and how it positions itself,
+    // not only against legal rules.
+    strategies.length ? searchBrandMany(brand.db, strategies, { docTypes: ["persona", "messaging", "brand_guidelines", "legal_claims"], limit: 5 }, ctx) : [],
+    claims.length ? searchBrandMany(brand.db, claims, { maxTier: 2, limit: 3 }, ctx) : [],
+  ]);
+  const evidence = items.map((item, i) => {
+    const facts = factsPerItem[i];
+    const chunks = item.startsWith("strategy:") ? strategyChunks[strategies.indexOf(item)] : claimChunks[claims.indexOf(item)];
+    return `## Requested: ${item}\nFacts:\n${facts.map((f) => `- [${f.docId}, tier ${f.tier}] ${f.statement} | quote: "${f.quote}"`).join("\n")}\nPassages:\n${chunks.map((c) => `[${c.docId} | ${c.headingPath} | tier ${c.tier}]\n${c.text.slice(0, 1800)}`).join("\n\n")}`;
+  });
 
   const overrides = brief.overrides.map((o) => `- ${o.subject}: ${o.statement} ("${o.quote}")`).join("\n");
   const res = await llm.json({

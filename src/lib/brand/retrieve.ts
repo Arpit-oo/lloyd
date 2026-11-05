@@ -51,12 +51,13 @@ export async function searchBrandMany(bdb: BrandDB, queries: string[], opts: Sea
   const byId = new Map(rows.map((r) => [r.id, r]));
   const vectors = rows.filter((r) => r.embedding).map((r) => ({ id: r.id, v: fromBlob(r.embedding!) }));
   const queryVectors = await embed(queries, "retrieve:query", ctx);
+  const fts = bdb.prepare("SELECT rowid AS id FROM chunks_fts WHERE chunks_fts MATCH ? ORDER BY rank LIMIT 200");
 
   return queries.map((query, q) => {
     // BM25 over the filtered set.
     const ftsQuery = toFtsQuery(query);
     const bm25 = ftsQuery
-      ? (bdb.prepare("SELECT rowid AS id FROM chunks_fts WHERE chunks_fts MATCH ? ORDER BY rank LIMIT 200").all(ftsQuery) as { id: number }[])
+      ? (fts.all(ftsQuery) as { id: number }[])
           .map((r) => r.id)
           .filter((id) => byId.has(id))
       : [];

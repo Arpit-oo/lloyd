@@ -432,7 +432,8 @@ function brandCheckQuestion(flagged: BrandCheckItem[]): Questions["questions"][n
   const n = flagged.length;
   return {
     id: BRAND_CHECK_QUESTION_ID,
-    question: n === 1 ? "I won't do one thing in the brief as written (see above). Do you still need it?" : `I won't do ${n} things in the brief as written (see above). Do you still need any of them?`,
+    // Asset types Lloyd doesn't make are on the card too but aren't offered here, so no count.
+    question: n === 1 ? "One claim or idea in the brief I won't use as written (see above). Do you still need it?" : "Some claims or ideas in the brief I won't use as written (see above). Do you still need any of them?",
     why: "Pick any you need and I'll find the closest way the brand and legal rules allow. Otherwise I'll use the alternatives shown above.",
     options: [BRAND_CHECK_NONE, ...flagged.map((i) => shortLabel(i.requested))],
     multi_select: true,

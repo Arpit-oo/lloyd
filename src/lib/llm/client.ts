@@ -82,8 +82,8 @@ const globalForLlm = globalThis as unknown as {
 
 /** A streamed answer with no event for this long is treated as stalled (see the streaming loop below). */
 const STALL_MS = 120_000;
-/** Output cap for calls that don't set their own (reasoning tokens count toward it). */
-const DEFAULT_MAX_OUTPUT_TOKENS = 16_000;
+/** Output cap for calls that don't set their own. Reasoning tokens count toward it, so it is set well above any real answer (ingest of a big brand folder included); it only bounds a runaway. */
+const DEFAULT_MAX_OUTPUT_TOKENS = 32_000;
 /** This many whitespace characters in a row means the model is looping (see the streaming loop). */
 const RUNAWAY_WHITESPACE = 400;
 

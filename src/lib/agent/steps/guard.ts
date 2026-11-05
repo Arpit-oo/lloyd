@@ -83,14 +83,13 @@ export async function guardAsset(brand: Brand, data: CampaignData, item: PlanIte
 
   // Evidence per paragraph, plus the product and claims passages themselves: a capability the
   // product doc states is not "unsupported" just because no extracted fact matched the whole asset.
-  const paragraphs = text.split(/\n\s*\n/).map((p) => p.trim()).filter((p) => p.length > 30).slice(0, 24);
-  const queries = paragraphs.length ? paragraphs : [text.slice(0, 6000)];
+  const queries = evidenceQueries(text);
   const [perParagraph, passagesPerParagraph] = await Promise.all([
     searchFactsMany(brand.db, queries, 8, ctx),
     searchBrandMany(brand.db, queries, { docTypes: ["product", "messaging", "legal_claims"], limit: 2 }, ctx),
   ]);
-  const facts = [...new Map(perParagraph.flat().map((f): [string, FactHit] => [f.id, f])).values()].slice(0, 60);
-  const passages = [...new Map(passagesPerParagraph.flat().map((h): [number, ChunkHit] => [h.id, h])).values()].slice(0, 12);
+  const facts = roundRobin(perParagraph, (f: FactHit) => f.id, 60);
+  const passages = roundRobin(passagesPerParagraph, (h: ChunkHit) => h.id, 12);
   const res = await llm.json({
     step: `guard:${content.type}`,
     tier: "fast",
@@ -126,7 +125,44 @@ export function imageIdOf(a: AssetContent): string | null {
   }
 }
 
-const MONTH = "(?:jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|june?|july?|aug(?:ust)?|sep(?:t(?:ember)?)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)";
+const MAX_QUERIES = 24;
+
+/**
+ * One retrieval query per paragraph. Short lines (a headline, a CTA, "Subject: ...") are joined
+ * to the next paragraph rather than dropped, and a very long asset is folded into at most
+ * MAX_QUERIES queries, so every line of the asset is searched.
+ */
+export function evidenceQueries(text: string): string[] {
+  const parts: string[] = [];
+  let pending = "";
+  for (const p of text.split(/\n\s*\n/).map((s) => s.trim()).filter(Boolean)) {
+    pending = pending ? `${pending}\n${p}` : p;
+    if (pending.length > 30) {
+      parts.push(pending);
+      pending = "";
+    }
+  }
+  if (pending && parts.length) parts[parts.length - 1] += `\n${pending}`;
+  else if (pending) parts.push(pending);
+  if (parts.length <= MAX_QUERIES) return parts.length ? parts : [text.slice(0, 6000)];
+  const per = Math.ceil(parts.length / MAX_QUERIES);
+  return Array.from({ length: Math.ceil(parts.length / per) }, (_, i) => parts.slice(i * per, (i + 1) * per).join("\n\n"));
+}
+
+/** Best hits of every query first, then second-best, and so on: a cap never starves the later paragraphs. */
+export function roundRobin<T, K>(lists: T[][], key: (t: T) => K, cap: number): T[] {
+  const seen = new Map<K, T>();
+  for (let rank = 0; seen.size < cap && lists.some((l) => rank < l.length); rank++) {
+    for (const list of lists) {
+      const hit = list[rank];
+      if (hit && !seen.has(key(hit))) seen.set(key(hit), hit);
+      if (seen.size >= cap) break;
+    }
+  }
+  return [...seen.values()];
+}
+
+const MONTH ="(?:jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|june?|july?|aug(?:ust)?|sep(?:t(?:ember)?)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)";
 const DATE_RE = new RegExp(
   [
     String.raw`\b${MONTH}\.?\s+\d{1,2}(?:st|nd|rd|th)?(?:,?\s+\d{4})?`,
@@ -145,14 +181,16 @@ export function targetNumbers(target: string): string[] {
   return (target.replace(DATE_RE, " ").match(/\d[\d,.]*/g) ?? []).map((n) => n.replace(/[.,]+$/, "")).filter((n) => n.length >= 2);
 }
 
-const STOP = new Set(["at", "least", "more", "than", "of", "the", "a", "an", "new", "from", "by", "in", "to", "and", "or", "per"]);
+const STOP = new Set(["at", "least", "more", "than", "of", "the", "a", "an", "new", "from", "by", "in", "to", "and", "or", "per", "for", "with", "already", "over", "about"]);
 const stem = (w: string) => w.toLowerCase().slice(0, 5);
-const wordsAfter = (s: string, from: number) => (s.slice(from).match(/^\s*%|[a-z]+/gi) ?? []).slice(0, 4).map((w) => w.trim().toLowerCase()).filter((w) => !STOP.has(w));
+/** The words right after a number, up to the end of its clause ("30 minutes. Customers ..." stops at the period). */
+const clauseAfter = (s: string, from: number) => (s.slice(from).split(/[.;:!?,()\n]|\s[-–—]\s/)[0].match(/^\s*%|[a-z]+/gi) ?? []).map((w) => w.trim().toLowerCase());
 
 /**
  * The target numbers that appear in copy counting the same thing: "30 customers" leaks the
- * target "30 customers moving to contain mode", but "30 minutes by default" doesn't, and
- * neither do "1,300" or "2030".
+ * target "30 customers moving to contain mode", but "30 minutes by default", "a 30-day trial
+ * for customers", "1,300" and "2030" don't. Paraphrased leaks ("30 teams") are left to the
+ * model check, which also sees the internal targets.
  */
 export function leakedTargetNumbers(text: string, target: string): string[] {
   const plainTarget = target.replace(DATE_RE, " ");
@@ -160,10 +198,12 @@ export function leakedTargetNumbers(text: string, target: string): string[] {
     const whole = `(?:^|[^\\d.,])${n.replace(/[.,]/g, "\\$&")}(?!\\d|[.,]\\d)`;
     const at = new RegExp(whole, "g");
     const unitMatch = new RegExp(whole).exec(plainTarget);
-    const units = unitMatch ? wordsAfter(plainTarget, unitMatch.index + unitMatch[0].length).map(stem) : [];
+    // The target's unit: its first content words after the number ("customers moving cluster").
+    const units = unitMatch ? clauseAfter(plainTarget, unitMatch.index + unitMatch[0].length).filter((w) => !STOP.has(w)).slice(0, 3).map(stem) : [];
     if (!units.length) return at.test(text);
     for (const m of text.matchAll(at)) {
-      const after = wordsAfter(text, (m.index ?? 0) + m[0].length).map(stem);
+      // The copy's unit: the next three words, stop words included, so "30-day trial for customers" is about days.
+      const after = clauseAfter(text, (m.index ?? 0) + m[0].length).slice(0, 3).filter((w) => !STOP.has(w)).map(stem);
       if (after.some((w) => units.includes(w))) return true;
     }
     return false;
