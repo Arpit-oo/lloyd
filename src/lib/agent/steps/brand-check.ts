@@ -32,13 +32,27 @@ Do not invent rules. If the evidence does not cover an item, verdict "ok" with r
 For an "ok" item, alternative is null or the item as asked: never add execution advice, and never attach capabilities of a different product to the one the brief names.
 A factual claim that only the marketer can know is true (seat counts, scarcity, deadlines, "first", "only", rankings, customer counts) and that no brand document confirms: verdict "needs_change", rule "Unverified factual claim", alternative: keep it only if it is true at publish time, otherwise drop it.`;
 
+/** The rule shown for a requested asset type Lloyd does not make (not a brand rule, so never put to the marketer as one). */
+export const OUT_OF_SCOPE_RULE = "Lloyd makes social posts (LinkedIn, X), blog posts, landing pages and emails only.";
+
 export async function checkBrief(brand: Brand, brief: StructuredBrief, ctx: CallContext): Promise<BrandCheckItem[]> {
   const items = [
     ...(brief.lead_angle ? [`strategy: lead the campaign with "${brief.lead_angle}" for ${brief.audiences.map((a) => a.name).join(" and ")}`] : []),
     ...brief.requested_claims.map((c) => `${c.kind}: ${c.text} (brief says: "${c.brief_quote}")`),
-    ...brief.requested_assets.filter((a) => a.type === "other").map((a) => `asset outside allowed types: ${a.description}`),
   ];
-  if (!items.length) return [];
+  // Asset types Lloyd does not make are a scope rule of this app, not a brand rule: answered
+  // without the model, so a "no brand rule forbids TikTok" verdict can't slip through.
+  const outOfScope: BrandCheckItem[] = brief.requested_assets
+    .filter((a) => a.type === "other")
+    .map((a) => ({
+      requested: a.description,
+      verdict: "conflict",
+      rule: OUT_OF_SCOPE_RULE,
+      source_doc: null,
+      source_quote: null,
+      alternative: "Left out of the plan. Where it helps, its message is carried by one of the assets Lloyd does make.",
+    }));
+  if (!items.length) return outOfScope;
 
   const evidence = await Promise.all(
     items.map(async (item) => {
@@ -67,5 +81,5 @@ export async function checkBrief(brand: Brand, brief: StructuredBrief, ctx: Call
     cacheKey: `brand:${brand.hash}`,
     ctx,
   });
-  return res.data.items;
+  return [...res.data.items, ...outOfScope];
 }

@@ -102,11 +102,11 @@ function AppearanceSection({ appearance, change }: { appearance: Appearance; cha
   };
   return (
     <section>
-      <Row title="Style" hint="Magi: white, clean, magenta accent. Classic: warm paper and serif headings.">
+      <Row title="Style" hint="Lloyd: white, clean, magenta accent. Classic: warm paper and serif headings.">
         <div role="radiogroup" aria-label="Style" className="flex gap-1 rounded-lg bg-ink/5 p-0.5">
           {(
             [
-              ["magi", "Magi"],
+              ["lloyd", "Lloyd"],
               ["classic", "Classic"],
             ] as const
           ).map(([st, label]) => (

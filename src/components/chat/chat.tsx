@@ -106,7 +106,7 @@ export function Chat({ view, busy, run, notice, onSend, onStop, onOpenAsset, mod
     </>
   );
 
-  if (!messages.length && !busy) return <Welcome composer={composer(true)} name={prefs.name} showMascot={prefs.showMascot} magi={themes.appearance.style === "magi"} onPick={(b) => { setDraft(b.text); inputRef.current?.focus(); }} />;
+  if (!messages.length && !busy) return <Welcome composer={composer(true)} name={prefs.name} showMascot={prefs.showMascot} lloydStyle={themes.appearance.style === "lloyd"} onPick={(b) => { setDraft(b.text); inputRef.current?.focus(); }} />;
 
   const lastInteractive = [...messages].reverse().find((m) => m.role === "assistant" && (m.kind === "questions" || m.kind === "plan"))?.id;
   const lastMessage = messages[messages.length - 1];
@@ -213,7 +213,7 @@ function greeting(name: string) {
   return name.trim() ? `${part}, ${name.trim()}` : part;
 }
 
-function Welcome({ composer, onPick, name, showMascot, magi }: { composer: React.ReactNode; onPick: (b: SampleBrief) => void; name: string; showMascot: boolean; magi: boolean }) {
+function Welcome({ composer, onPick, name, showMascot, lloydStyle }: { composer: React.ReactNode; onPick: (b: SampleBrief) => void; name: string; showMascot: boolean; lloydStyle: boolean }) {
   const [briefs, setBriefs] = useState<SampleBrief[]>([]);
   useEffect(() => {
     getJSON<SampleBrief[]>("/api/briefs").then(setBriefs).catch(() => setBriefs([]));
@@ -221,7 +221,7 @@ function Welcome({ composer, onPick, name, showMascot, magi }: { composer: React
   return (
     <div className="flex flex-1 flex-col items-center justify-center overflow-y-auto px-4 pb-16 sm:px-6">
       {showMascot && <Bee size={64} mood="hover" className="mb-4" />}
-      {magi ? (
+      {lloydStyle ? (
         <h1 className="mb-8 text-balance text-center text-[30px] font-medium leading-[1.2] tracking-[-0.02em] text-ink sm:text-[36px]">
           {name.trim() ? `Hey there, ${name.trim()}.` : "Hey there."}
           <br />

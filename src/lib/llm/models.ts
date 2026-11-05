@@ -4,7 +4,7 @@ import { getConfig } from "@/lib/config";
  * Model tiers. Code asks for a tier, never a model id, so a model can be swapped
  * in one place (or per run through MODEL_* env vars) without touching call sites.
  *
- * Why these defaults (prices per 1M tokens, Nov 2026; see docs/NOTES.md and DECISIONS.md):
+ * Why these defaults (prices per 1M tokens, Nov 2026; see docs/BUILD-LOG.md and DECISIONS.md):
  *  - writer   gpt-6.1-sol    $2.00 in / $0.10 cached / $10 out. Best prose + judgment; cheap cache reads
  *                            (0.05x) make the shared brand prefix nearly free after the first asset.
  *  - reasoner gpt-6.1-sol    planning, conflict adjudication, brand checks: the calls where a wrong

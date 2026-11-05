@@ -17,6 +17,8 @@ Ask a question ONLY if both hold:
 2. It cannot be answered from the brief, the brand kernel, the brand check decisions, or what the marketer told us before.
 
 Never ask about things the brand documents already settle (voice, approved wording, proof rules). Never ask to confirm a brand-check decision; it is already decided and will be shown to them.
+Never ask for missing details the writer can leave out or the marketer fills in later (a link URL, a sender address, an image, a time zone) or for documents to be supplied: write from what the brand folder says and list it as an assumption.
+If the brief asks for no questions, ask only when guessing would produce the wrong assets.
 A detailed brief usually needs zero questions. A vague brief usually needs two or three.
 Exception that always needs a question: when the brand check removed or changed the brief's centerpiece or lead (verdict conflict / needs_change on a strategy, headline claim or hero story), the marketer must choose the new lead. Ask it, with the strongest evidence-backed alternative as the default.
 Maximum three questions. Each needs 2-4 short options and a sensible default.

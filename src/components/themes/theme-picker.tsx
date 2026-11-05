@@ -11,8 +11,8 @@ import { Wallpaper } from "./wallpaper";
  * Keyboard: ←/→ move, Enter applies, Esc closes. Clicking applies with a reveal from the click.
  */
 const PLAIN: { id: string; mode: Appearance["mode"]; style: Appearance["style"]; name: string; icon: typeof Sun; swatch: string; iconColor: string }[] = [
-  { id: "magi", mode: "light", style: "magi", name: "Magi", icon: Sparkles, swatch: "linear-gradient(135deg,#ffffff 55%,#fceaf9)", iconColor: "#d936c4" },
-  { id: "magi-dark", mode: "dark", style: "magi", name: "Magi Dark", icon: Sparkles, swatch: "linear-gradient(135deg,#1b1b20 55%,#3a1435)", iconColor: "#f06be0" },
+  { id: "lloyd", mode: "light", style: "lloyd", name: "Lloyd", icon: Sparkles, swatch: "linear-gradient(135deg,#ffffff 55%,#fceaf9)", iconColor: "#d936c4" },
+  { id: "lloyd-dark", mode: "dark", style: "lloyd", name: "Lloyd Dark", icon: Sparkles, swatch: "linear-gradient(135deg,#1b1b20 55%,#3a1435)", iconColor: "#f06be0" },
   { id: "paper", mode: "light", style: "classic", name: "Paper", icon: Sun, swatch: "linear-gradient(135deg,#faf9f6,#ebe6dc)", iconColor: "#615d55" },
   { id: "night", mode: "dark", style: "classic", name: "Night", icon: Moon, swatch: "linear-gradient(135deg,#30302e,#1f1e1c)", iconColor: "#d8d4cc" },
 ];

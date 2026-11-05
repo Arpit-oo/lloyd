@@ -1,30 +1,29 @@
 import { z } from "zod";
-import { humanizeContent } from "@/lib/text/punctuation";
 import { requireBrand, type Brand } from "@/lib/brand";
 import { db, newId } from "@/lib/db";
 import { resolveModels, type ModelSettings } from "@/lib/llm/catalog";
 import { llm, type CallContext } from "@/lib/llm/client";
 import { proposeMemories, rememberNow, styleFromMemories } from "@/lib/memory/extract";
 import { markUsed, memoriesForPrompt } from "@/lib/memory/store";
+import { draftText } from "@/lib/text/partial-json";
+import { humanizeContent } from "@/lib/text/punctuation";
+import { ASSET_LABEL, ASSET_SCHEMAS, ASSET_TYPES, type AssetContent, type AssetType } from "./asset-types";
 import { getAttachments, linkAttachments, renderAttachments, toReferences } from "./attachments";
+import { CONFIRM_REPLIES } from "./confirm";
 import { mergeStyle } from "./design";
 import { readNewLinks, referenceUrls, type Reference } from "./references";
-import { brandLook } from "./steps/editor";
-import * as store from "./store";
-import { checkBrief } from "./steps/brand-check";
-import { CONFIRM_REPLIES } from "./confirm";
-import { editAsset } from "./steps/editor";
-import { checkEditRequest } from "./steps/request-check";
+import { checkBrief, OUT_OF_SCOPE_RULE } from "./steps/brand-check";
+import { brandLook, editAsset } from "./steps/editor";
 import { generateFreeform } from "./steps/freeform";
 import { guardAsset, type GuardReport } from "./steps/guard";
 import { readBrief } from "./steps/intake";
 import { proposePlan, revisePlan } from "./steps/planner";
 import { decideQuestions } from "./steps/questions";
+import { checkEditRequest } from "./steps/request-check";
 import { routeMessage } from "./steps/router";
 import { writeAsset, writerPrefix } from "./steps/writer";
-import { ASSET_LABEL, ASSET_SCHEMAS, ASSET_TYPES, type AssetContent, type AssetType } from "./asset-types";
+import * as store from "./store";
 import type { BrandCheckItem, CampaignData, PlanItem, Questions } from "./types";
-import { draftText } from "@/lib/text/partial-json";
 
 /**
  * The campaign agent. One entry point per user message; it runs the step the current state
@@ -110,7 +109,7 @@ export async function handleMessage(campaignId: string, text: string, emit: Emit
         return;
       }
       if (briefNow) {
-        // A short real brief ("Leashgate webinar post") is kept and the documents added to it; a greeting is dropped.
+        // A short real brief ("webinar post for the new product") is kept and the documents added to it; a greeting is dropped.
         const old = campaign.data.briefText ?? "";
         await restartFromBrief(brand, t, [isSmallTalk(old) ? "" : old, text].filter((s) => s.trim()).join("\n\n"), docs, opts.author);
         return;
@@ -284,7 +283,7 @@ async function startFromBrief(brand: Brand, t: Turn, briefText: string) {
   t.status("Deciding whether I need to ask anything");
   const questions = await decideQuestions(brand, t.data(), memories, t.ctx);
   // Anything the brand check changed or refused is the marketer's call too: ask before planning.
-  const flagged = brandCheck.filter((i) => i.verdict !== "ok");
+  const flagged = brandCheck.filter((i) => i.verdict !== "ok" && i.rule !== OUT_OF_SCOPE_RULE);
   if (flagged.length) questions.questions.push(brandCheckQuestion(flagged));
   // The card marks the suggested option itself; drop "(default)" / "Default:" the model sometimes writes into the text.
   const tidy = (o: string) => o.replace(/\s*\((default|suggested)\)\s*$/i, "").replace(/^(default|suggested):\s*/i, "").trim();
@@ -383,7 +382,7 @@ async function classifyOpening(brand: Brand, text: string, ctx: CallContext): Pr
     tier: "fast",
     effort: "low",
     system: [{ text: `You are Lloyd, a campaign assistant that writes on-brand marketing assets (LinkedIn and X posts, blog posts, landing pages, emails) for ${brand.tokens?.brand_name || "the brand"}.
-Decide whether the marketer's message is a campaign brief or request for marketing work, however short or vague ("awareness push for Quenchline", "LinkedIn posts about the launch", "something for the webinar") = "brief";
+Decide whether the marketer's message is a campaign brief or request for marketing work, however short or vague ("awareness push for the new product", "LinkedIn posts about the launch", "something for the webinar") = "brief";
 or chat that asks for no marketing work: greetings, how are you, questions about you or how this works, thanks, jokes, off-topic remarks = "chat". When unsure, "brief".
 For chat, answer it briefly and warmly, as Lloyd. Don't ask for a brief; that is added after your reply.` }],
     input: text,
@@ -423,7 +422,7 @@ async function restartFromBrief(brand: Brand, t: Turn, text: string, docs: Draft
 export const BRAND_CHECK_QUESTION_ID = "brand_check";
 export const BRAND_CHECK_NONE = "No, the alternatives are fine";
 const shortLabel = (s: string) => {
-  // "certification: Wickhold is FedRAMP Authorized" -> "Wickhold is FedRAMP Authorized"
+  // "certification: Acme is ISO 27001 certified" -> "Acme is ISO 27001 certified"
   const plain = s.replace(/[*_`]/g, "").replace(/\s+/g, " ").trim().replace(/^[a-z_ ]{3,24}:\s+/i, "");
   return plain.length <= 90 ? plain : `${plain.slice(0, 87).replace(/\s+\S*$/, "")}…`;
 };

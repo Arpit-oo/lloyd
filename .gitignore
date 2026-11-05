@@ -10,23 +10,18 @@ dist/
 .env.local
 .env.*.local
 
-# brand package from Magi (not ours to commit, 30 MB)
+# the sample brand folder (provided with the brief, not ours to commit, 30 MB)
 wickhold-candidate-package/
 wickhold-candidate-package.zip
-Magi Take-Home Brief.pdf
 
-# runtime data
+# runtime data: campaigns, brand indexes, call logs
 data/
 logs/
 
-# os / editor
+# os / editor / tools
 .DS_Store
 Thumbs.db
 .vscode/*
 !.vscode/extensions.json
-logs/
 .playwright-mcp/
-
-# reference material saved from other sites (not ours to commit)
-Autonomous marketing. Human ambition_/
-Autonomous marketing. Human ambition_.zip
+.impeccable/

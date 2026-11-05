@@ -2,7 +2,7 @@ import { z } from "zod";
 import type { Brand } from "@/lib/brand";
 import { findFormerNames } from "@/lib/brand/entities";
 import { isImageAllowed, type ImageRules } from "@/lib/brand/images";
-import { searchFacts } from "@/lib/brand/retrieve";
+import { searchBrandMany, searchFactsMany, type ChunkHit, type FactHit } from "@/lib/brand/retrieve";
 import { llm, type CallContext } from "@/lib/llm/client";
 import { assetToText, type AssetContent } from "../asset-types";
 import { brandBlock, campaignBlock } from "../context";
@@ -46,6 +46,7 @@ Supported vs. forbidden, and process vs. rule:
 - A review step in the brand's process (e.g. "claims go to Legal before publishing", "developer relations checks how-tos") is a workflow note for the humans, not a reason to block or rewrite copy. Mention it at most as a warning.
 - Missing details the brand documents do not supply (a link target, an address, a sender, a time zone) and missing optional elements (no image or screenshot) are warnings for the human to fill in, never blocks.
 - Craft and completeness (a recommended point left out, section order, a weaker opening than the plan intended) are warnings. Block means the asset must not be published as is.
+- Block what the asset SAYS, never what it leaves out. No single asset has to carry every key message, limit or approved statement of the campaign; an omission is at most a warning, unless the brief names this exact asset as the one that must include it.
 - Block only what breaks a rule: banned or wrongly worded claims, facts that contradict a higher-authority source, statements with no support in any brand document or the brief, uncleared customers, expired or unsourced statistics, broken brief constraints, internal numbers in copy.
 
 Quote the exact offending text. If the asset is clean, return no issues.`;
@@ -66,8 +67,7 @@ export async function guardAsset(brand: Brand, data: CampaignData, item: PlanIte
   const issues: GuardIssue[] = [...(LIMITS[content.type]?.(content) ?? [])];
 
   for (const target of data.brief?.internal_targets ?? []) {
-    const numbers = targetNumbers(target);
-    for (const n of numbers) if (n.length >= 2 && text.includes(n)) issues.push({ check: "rule", quote: n, problem: "An internal target appears in copy", rule: `Internal target: "${target}"`, source_doc: "brief", severity: "block", fix: "Remove the internal number." });
+    for (const n of leakedTargetNumbers(text, target)) issues.push({ check: "rule", quote: n, problem: "An internal target appears in copy", rule: `Internal target: "${target}"`, source_doc: "brief", severity: "block", fix: "Remove the internal number." });
   }
 
   for (const hit of findFormerNames(text, brand.entities)) {
@@ -81,7 +81,16 @@ export async function guardAsset(brand: Brand, data: CampaignData, item: PlanIte
     if (!verdict.ok) issues.push({ check: "rule", quote: imageId, problem: `Image not allowed: ${verdict.reason}`, rule: "Image usage restrictions", source_doc: "image metadata", severity: "block", fix: "Pick another image." });
   }
 
-  const facts = await searchFacts(brand.db, text.slice(0, 6000), 30, ctx);
+  // Evidence per paragraph, plus the product and claims passages themselves: a capability the
+  // product doc states is not "unsupported" just because no extracted fact matched the whole asset.
+  const paragraphs = text.split(/\n\s*\n/).map((p) => p.trim()).filter((p) => p.length > 30).slice(0, 24);
+  const queries = paragraphs.length ? paragraphs : [text.slice(0, 6000)];
+  const [perParagraph, passagesPerParagraph] = await Promise.all([
+    searchFactsMany(brand.db, queries, 8, ctx),
+    searchBrandMany(brand.db, queries, { docTypes: ["product", "messaging", "legal_claims"], limit: 2 }, ctx),
+  ]);
+  const facts = [...new Map(perParagraph.flat().map((f): [string, FactHit] => [f.id, f])).values()].slice(0, 60);
+  const passages = [...new Map(passagesPerParagraph.flat().map((h): [number, ChunkHit] => [h.id, h])).values()].slice(0, 12);
   const res = await llm.json({
     step: `guard:${content.type}`,
     tier: "fast",
@@ -89,6 +98,7 @@ export async function guardAsset(brand: Brand, data: CampaignData, item: PlanIte
     system: [brandBlock(brand, RULES), campaignBlock(data, [])],
     input: [
       { label: "related facts", text: `Brand facts related to this asset:\n${facts.map((f) => `- [${f.docId}, tier ${f.tier}] ${f.statement} ("${f.quote}")`).join("\n")}` },
+      { label: "related passages", text: `Product, messaging and claims passages related to this asset:\n\n${passages.map((h) => `[${h.docId} | ${h.headingPath} | tier ${h.tier}]\n${h.text}`).join("\n\n---\n\n")}` },
       { label: "asset", text: `Asset (${content.type}, publish date ${item.publish_date ?? "unknown"}, image: ${imageId ?? "none"}):\n${JSON.stringify(content.data, null, 2)}` },
     ],
     schema: z.object({ issues: z.array(GuardIssueSchema) }),
@@ -133,4 +143,29 @@ const DATE_RE = new RegExp(
  */
 export function targetNumbers(target: string): string[] {
   return (target.replace(DATE_RE, " ").match(/\d[\d,.]*/g) ?? []).map((n) => n.replace(/[.,]+$/, "")).filter((n) => n.length >= 2);
+}
+
+const STOP = new Set(["at", "least", "more", "than", "of", "the", "a", "an", "new", "from", "by", "in", "to", "and", "or", "per"]);
+const stem = (w: string) => w.toLowerCase().slice(0, 5);
+const wordsAfter = (s: string, from: number) => (s.slice(from).match(/^\s*%|[a-z]+/gi) ?? []).slice(0, 4).map((w) => w.trim().toLowerCase()).filter((w) => !STOP.has(w));
+
+/**
+ * The target numbers that appear in copy counting the same thing: "30 customers" leaks the
+ * target "30 customers moving to contain mode", but "30 minutes by default" doesn't, and
+ * neither do "1,300" or "2030".
+ */
+export function leakedTargetNumbers(text: string, target: string): string[] {
+  const plainTarget = target.replace(DATE_RE, " ");
+  return targetNumbers(target).filter((n) => {
+    const whole = `(?:^|[^\\d.,])${n.replace(/[.,]/g, "\\$&")}(?!\\d|[.,]\\d)`;
+    const at = new RegExp(whole, "g");
+    const unitMatch = new RegExp(whole).exec(plainTarget);
+    const units = unitMatch ? wordsAfter(plainTarget, unitMatch.index + unitMatch[0].length).map(stem) : [];
+    if (!units.length) return at.test(text);
+    for (const m of text.matchAll(at)) {
+      const after = wordsAfter(text, (m.index ?? 0) + m[0].length).map(stem);
+      if (after.some((w) => units.includes(w))) return true;
+    }
+    return false;
+  });
 }

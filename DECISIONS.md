@@ -54,20 +54,22 @@ Memories are *proposed* at the end of a campaign with a justifying quote; none i
 - **gpt-6.1-terra** handles volume: intake, routing, claim and request checks, facts, conflicts, vision, memory.
 - **gpt-6-luna** writes doc cards and parses image rules: 10× cheaper but slow, fine for one-time ingest.
 
-One wrapper logs every request with usage (cache writes included), cost and latency, and enforces a per-run spend cap. Numbers are in [COSTS.md](COSTS.md).
+One wrapper logs every request with usage (cache writes included), cost and latency, and enforces a per-run spend cap. Every call also has an output cap, and a streamed answer that turns into a run of blank lines (it happened once: 128k tokens of whitespace inside JSON) is stopped and retried. Numbers are in [COSTS.md](COSTS.md).
 
 ## 7. Results
 
-`npm run bench` runs the three briefs end to end, checks behaviour (`evals/*.json`) and writes COSTS.md. Latest full run: **32/33**. The miss was the internal-target check reading the year in "by March 31, 2027" as a secret number; it now ignores dates, has a unit test, and Brief 1 re-ran at 12/12.
+`npm run bench` runs the three briefs end to end, checks behaviour (`evals/*.json`) and writes COSTS.md. Latest full run: **32/33**. The miss: the claim check blocked an X post for what it left out (the outcome statement), not for anything it said. It now blocks only what an asset says, and Brief 1 re-ran at 12/12.
 
 | Brief | Questions | Assets | Behaviour checked | Cost |
 |---|---|---|---|---|
-| 1. Detailed GA launch | 0 | 11 | all eight brief bans held | $0.59 |
-| 2. Vague awareness push | 2, with defaults | 4 | asks before planning | $0.16 |
-| 3. Trap brief | 1 | 6 | FedRAMP and Vaskell refused with quotes; the corrected FedRAMP line never became a headline | $0.26 |
+| 1. Detailed GA launch | 0 | 11 | all eight brief bans held | $0.61 |
+| 2. Vague awareness push | 2, with defaults | 5 | asks before planning | $0.26 |
+| 3. Trap brief | 1 | 6 | FedRAMP and Vaskell refused with quotes; the corrected FedRAMP line never became a headline | $0.32 |
 | Memory | | | "no hashtags on LinkedIn" learned in campaign 1, applied in campaign 2 | |
 
-A typical edit costs about $0.02, and 45–53% of input tokens are read from cache. Extra briefs cover what the samples don't: `fixtures/mock-briefs/` (vague, traps, reference link) and `fixtures/test-briefs/` (messy Slack paste, conflicting stakeholders, breach newsjacking, retired names and expired stats, each with an answer key). A second brand (`fixtures/mini-brand`: no governance doc, images without metadata) refused its own traps with no leakage from Wickhold.
+A typical edit costs 2–4¢, and 34–44% of input tokens are read from cache. Both are a little worse than before the unseen-brief fixes below, because the claim check now reads evidence for every paragraph: a few cents per campaign for not stripping true facts. Extra briefs cover what the samples don't: `fixtures/mock-briefs/` (vague, traps, reference link) and nine in `fixtures/test-briefs/` with an answer key (Slack paste, conflicting stakeholders, breach newsjacking, retired names and expired stats, a sales rep's banned-claims list, a one-email ask, channels Lloyd doesn't make). A second brand (`fixtures/mini-brand`: no governance doc, images without metadata) refused its own traps with no leakage from Wickhold.
+
+**Briefs it had never seen.** The last four test briefs, written after the build, held every trap but found three bugs, now fixed. The claim check refused facts the product doc states, so its auto-fix stripped a good email to two lines: its evidence was one embedding of the whole asset, which matched the topic and none of the specific claims, and it now retrieves per paragraph. The internal-target check blocked "30 minutes by default" because a goal said "30 customers"; it now checks what the number counts. And the brand check called a TikTok video "ok" because no brand rule forbids it; which asset types Lloyd makes is an app rule, so code answers it now.
 
 ## 8. Left out, and why
 
@@ -77,7 +79,7 @@ Image generation (library images only, as the brief says); OCR for scanned PDFs 
 
 - An external review of my plan recommended 2024 gpt-4o models; the key had gpt-6.1. It also suggested "newer file date wins", which is exactly this folder's trap.
 - The coding model's first cache design prewarmed without the output schema (found only by reading `cache_write_tokens`), and it once reported "styling applied" when assets had no colour fields. Both were caught by testing the claim, not reading the summary.
-- Model judgment failed both ways: it obeyed wording but missed strategy (Brief 3), and it refused documented facts (Brief 1). The eval now checks both.
+- Model judgment failed both ways: it obeyed wording but missed strategy (Brief 3), and it refused documented facts (Brief 1). The eval now checks both. Pass/fail checks still hid the second kind on new briefs: every trap held while true details were being stripped out. Reading the asset versions, not the score, found it.
 
 ## 10. With two more weeks
 

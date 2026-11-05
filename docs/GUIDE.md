@@ -67,7 +67,7 @@ Open it from Sidebar → **Brand**, or the Brand box → **What Lloyd knows abou
 | **Reload safety** | Reload the page mid-run | The run carries on and the progress comes back |
 | **Attachments as the brief** | Attach a PDF, Word, PowerPoint, Markdown or `.txt` file | Read as the brief (try `fixtures/mock-briefs/*.pdf`) |
 | **Reference links and images** | `One landing page for security engineers. Make it look and read like https://linear.app` | Steps show "Reading the reference link"; the page takes on that style, with no copied claims |
-| **Copy a site's look in review** | On a written landing page: `make it look like magihq.com` | Asks first (off-brand colours and fonts); *Yes, do it anyway* applies the site's real fonts and colours, measured from its CSS (MagiHQ: DM Sans, #0a0a0a on #faf9f5, red #fb2c36), plus its spacing and hero layout |
+| **Copy a site's look in review** | On a written landing page: `make it look like stripe.com` | Asks first (off-brand colours and fonts); *Yes, do it anyway* applies the site's real fonts and colours, measured from its CSS, plus its spacing and hero layout |
 | **Small talk** | Type `hi` or `Hi, what can you do?` in a new campaign | Instant reply explaining what Lloyd does; no model call |
 | **Chat after the campaign** | When the assets are written, send `thanks`, `how's your day` or `what makes a good tweet hook?` | A real answer to what you said, not "How can I help with your campaign?" |
 | **Plain punctuation** | Any written asset, edit or Lloyd chat reply | No em dashes anywhere; posts read like a person wrote them, never a note about missing facts |
@@ -94,7 +94,7 @@ Open it from Sidebar → **Brand**, or the Brand box → **What Lloyd knows abou
 | **Off-brand design asks first** | `change the email buttons and colours, use a sky blue theme` | A confirm card says sky blue isn't in the palette and names the closest brand colour; nothing changes until you choose. Brand colours go straight through |
 | **Section edits** | `Move the FAQ above the features`, `turn the features into numbered steps` | Sections reorder or change layout |
 | **Free-form design** | Asset toolbar → **Free-form design** | Brand warning first; *Yes, continue* → AI-written page in a sandbox with a yellow banner; **Back to template** undoes it |
-| **Free-form like a site** | Free-form design → `make it look like magihq.com` (type freely, Space included) | The page uses that site's fonts and colours and its layout style |
+| **Free-form like a site** | Free-form design → `make it look like stripe.com` (type freely, Space included) | The page uses that site's fonts and colours and its layout style |
 | **Updated badge, closing tabs** | Edit an asset, then ✕ a tab | Tabs show *updated*; closed tabs go under *Closed (n)* |
 | **Copy and download** | Asset toolbar → Copy, `.md` | Text comes out clean |
 
@@ -140,7 +140,7 @@ The full list of things chat can change is in [§9](#9-reference-what-chat-edits
 | **Quick switcher** | `Ctrl+K` | One search box over campaigns and brands; arrow keys and Enter |
 | **Campaign list** | Left sidebar | Search, grouped by date, rename or delete via ⋯ |
 | **Model choice** | Menu in the message box (*Balanced*) | Best / Balanced / Fast or a specific model, saved per campaign |
-| **Themes** | `/theme` or Settings → Appearance | Magi, Magi Dark, Classic Paper and Night, System, animated wallpapers. All readable |
+| **Themes** | `/theme` or Settings → Appearance | Lloyd, Lloyd Dark, Classic Paper and Night, System, animated wallpapers. All readable |
 | **Shortcuts** | `Ctrl+Shift+O` new campaign, `Ctrl+B` sidebar, `/` focus input, `Esc` close a panel | Each works |
 | **Phones** | Narrow the window below 768px | Sidebar becomes a drawer; assets open full screen |
 | **Layer stack** | Landing page → **Built in layers**; point at each layer or its text | That slab lifts and lights up with its text; left alone, it steps through the five layers by itself |
@@ -161,7 +161,7 @@ The full list of things chat can change is in [§9](#9-reference-what-chat-edits
 
 ---
 
-## 8. Test runs with the messy briefs
+## 8. Test runs with the extra briefs
 
 Each takes 3–6 minutes and $0.15–0.40. The answer key with every trap is in [fixtures/test-briefs/README.md](../fixtures/test-briefs/README.md).
 
@@ -172,6 +172,10 @@ Each takes 3–6 minutes and $0.15–0.40. The answer key with every trap is in 
 | `t3-breach-hook-rushed.md` | Newsjacking a breach, rushed | Victim never named, no humour, no 30-day hook; Lowmoor never turned into a percentage; asks what to lead with |
 | `t4-kubecon-vague.txt` | One line, typos, plain text | Asks 1–3 questions; refuses video and paid ads politely |
 | `t5-old-names-and-stale-stats.md` | Retired names, old guidelines, expired stats | Evenburn not Tallowatch, Wickhold not Wickhold Security, 2026 guidelines win over "v3 FINAL", Vaskell refused, Field Report 2024 refused |
+| `t6-quenchline-contain-mode-detailed.md` | Detailed like the samples, but its key messages break the rules; asks for TikTok and a press release | Lab qualifiers, no Lowmoor multiple, results never combined, 41% flagged as expired, TikTok and press release left out as out of scope |
+| `t7-budget-season-vague.md` | Four sentences, no assets or dates | 2–3 questions with defaults; a small mix; no savings claims |
+| `t8-healthcare-sales-ask.md` | Lowercase sales ask, almost every claim banned | "peers", "SOC 2 certified", "audit-ready", "helps prevent", "automatic remediation", "GDPR compliant", invented quote and ROI all refused; the copy never explains the rules |
+| `t9-one-email-only.md` | One asset, "no questions" | Zero questions, a one-email plan, real product detail from the docs |
 
 Then, on any of them, try the edits in §3 and finish with memory (§4).
 
@@ -184,7 +188,7 @@ npm run brief -- fixtures/test-briefs/t1-eu-push-slack-dump.md --answers "use de
 ### Automated checks
 
 ```bash
-npm test             # unit tests (chunking, conflicts, loaders, diff, streaming JSON, design settings, small talk, punctuation)
+npm test             # unit tests (chunking, conflicts, loaders, diff, streaming JSON, design settings, small talk, punctuation, internal-target check)
 npm run typecheck    # TypeScript
 npm run lint         # ESLint
 npm run eval         # agent behaviour on 3 briefs + memory (~$1.80, a few minutes); report in evals/last-report.md
@@ -235,7 +239,7 @@ The Share link is this computer's network address plus `?c=<campaign>`. People t
 
 ## 10. Costs
 
-- Full campaign: **16¢–59¢** (4–11 assets). One chat edit: **about 2–3¢**. Cache hit rate: **45–53%** of input tokens.
+- Full campaign: **26¢–61¢** (5–11 assets). One chat edit: **about 2–4¢**. Cache hit rate: **34–44%** of input tokens.
 - Indexing a brand: about **$1–3**, once per folder (the sample brand ships pre-indexed).
 - Free-form design: $0.05–0.15 per page.
 - Safety limit: no run can spend more than `MAX_USD_PER_RUN` (default $5).

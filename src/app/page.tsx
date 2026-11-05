@@ -14,7 +14,7 @@ export const metadata: Metadata = {
 };
 
 /**
- * Lloyd's marketing page, at /. The app lives at /app. Uses the app's Magi tokens (white, magenta accent, Inter).
+ * Lloyd's marketing page, at /. The app lives at /app. Uses the app's Lloyd tokens (white, magenta accent, Inter).
  * Every number on it comes from COSTS.md (the benchmark run), nothing is made up.
  */
 const NAV = [
@@ -25,9 +25,9 @@ const NAV = [
 ] as const;
 
 const OUTCOMES = [
-  { metric: "$0.16–$0.59", label: "for a whole campaign", detail: "Brief in, questions, plan, 4–11 assets written, fact-checked and fixed." },
-  { metric: "≈2¢", label: "per chat edit", detail: "One asset rewritten and re-checked. The rest of the campaign isn't touched." },
-  { metric: "45–53%", label: "prompt cache hit rate", detail: "The brand's rules sit at the front of every prompt, so they're cached and reused." },
+  { metric: "$0.26–$0.61", label: "for a whole campaign", detail: "Brief in, questions, plan, 5–11 assets written, fact-checked and fixed." },
+  { metric: "≈3¢", label: "per chat edit", detail: "One asset rewritten and re-checked. The rest of the campaign isn't touched." },
+  { metric: "34–44%", label: "prompt cache hit rate", detail: "The brand's rules sit at the front of every prompt, so they're cached and reused." },
 ];
 
 const STEPS = [
@@ -47,19 +47,19 @@ const AUDIENCES = [
 ];
 
 const COSTS = [
-  ["write:blog_post", "23,808", "45%", "$0.068"],
-  ["write:linkedin_post", "35,960", "38%", "$0.063"],
-  ["write:email", "33,517", "54%", "$0.059"],
-  ["plan", "7,176", "42%", "$0.056"],
-  ["brand-check", "18,596", "17%", "$0.053"],
-  ["edit:linkedin_post", "8,875", "44%", "$0.016"],
+  ["write:blog_post", "24,348", "46%", "$0.073"],
+  ["write:email", "33,795", "55%", "$0.059"],
+  ["write:linkedin_post", "36,300", "51%", "$0.056"],
+  ["plan", "7,213", "42%", "$0.055"],
+  ["brand-check", "18,450", "17%", "$0.049"],
+  ["edit:linkedin_post", "9,135", "46%", "$0.016"],
 ];
 
 const Eyebrow = ({ children }: { children: React.ReactNode }) => <p className="text-[12px] font-semibold uppercase tracking-[0.2em] text-accent-ink">{children}</p>;
 
 export default function LloydLanding() {
   return (
-    <div className="h-full overflow-y-auto overflow-x-clip bg-paper text-ink [font-family:var(--font-magi-sans)]">
+    <div className="h-full overflow-y-auto overflow-x-clip bg-paper text-ink [font-family:var(--font-lloyd-sans)]">
       {/* Nav */}
       <header className="sticky top-0 z-20 border-b border-line/70 bg-paper/80 backdrop-blur">
         <nav className="mx-auto flex max-w-7xl items-center justify-between px-6 py-4">
@@ -297,7 +297,7 @@ export default function LloydLanding() {
         <div className="mt-12 overflow-hidden rounded-2xl border border-line bg-surface shadow-[0_40px_100px_-50px_rgba(0,0,0,0.3)]">
           <div className="flex items-center justify-between border-b border-line bg-panel px-6 py-3 text-[13px]">
             <span className="font-semibold">Detailed launch brief · 11 assets</span>
-            <span className="text-muted">Total $0.590 · cache hit 46%</span>
+            <span className="text-muted">Total $0.605 · cache hit 42%</span>
           </div>
           <div className="overflow-x-auto"><table className="w-full min-w-[520px] text-left text-[14px]">
             <thead className="text-[12px] uppercase tracking-wider text-muted">

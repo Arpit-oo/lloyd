@@ -79,7 +79,7 @@ export function referenceUrls(text: string): string[] {
   return [...new Set(sentences.filter((s) => RESEMBLE_RE.test(s)).flatMap(extractUrls))].slice(0, 3);
 }
 
-/** "Make it like magihq.com", "like the reference", "same look as this site": an edit that should take a reference's design. */
+/** "Make it like stripe.com", "like the reference", "same look as this site": an edit that should take a reference's design. */
 export function pointsAtReference(text: string): boolean {
   if (!RESEMBLE_RE.test(text)) return false;
   return extractUrls(text).length > 0 || /\b(reference|(this|that|the|my) (site|page|website|design|screenshot|image|example|one))\b/i.test(text);

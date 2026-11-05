@@ -162,7 +162,7 @@ export async function resolveConflicts(
 
 /**
  * The audit pairs many low-tier claims with the same authoritative rule, so one real conflict
- * ("no dates in Leashgate claims") can come back ten times. Resolutions that share the same
+ * ("no dates in claims about the beta product") can come back ten times. Resolutions that share the same
  * most authoritative winning facts are merged into one, keeping every loser and the most confident explanation.
  */
 export interface StoredConflict {

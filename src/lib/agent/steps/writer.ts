@@ -1,10 +1,10 @@
 import type { Brand } from "@/lib/brand";
 import { llm, type CallContext } from "@/lib/llm/client";
 import type { MemoryForPrompt } from "@/lib/memory/store";
+import { humanizeContent } from "@/lib/text/punctuation";
 import { ASSET_LABEL, ASSET_SCHEMAS, type AssetContent } from "../asset-types";
 import { assetBlock, brandBlock, campaignBlock, channelBlock } from "../context";
 import type { CampaignData, PlanItem } from "../types";
-import { humanizeContent } from "@/lib/text/punctuation";
 import { imageCandidates, renderCandidates } from "./images";
 import { renderResearch, research, type ResearchFinding } from "./research";
 
@@ -24,7 +24,8 @@ export const WRITER_RULES = `You write marketing assets that a senior marketer a
 - Fill every field of the schema realistically for the channel (sender, subject, handle, byline, CTA).
 - Links: only URLs that appear in the brand context or the brief, and only where the page matches the link text. If no known URL fits (e.g. no demo-booking page is given), leave the url null; never point a CTA at an unrelated page or invent a path. No bracketed placeholders like [address] anywhere: leave a detail out rather than fake it.
 - Never promise response times, SLAs, support levels, prices, roadmap items or capabilities the context does not state. Describe only what the product does today, in the brand's words.
-- The asset is the thing that gets published, never a note to the marketer. Never write about drafting, missing facts, approvals, "on hold", "we need", or questions for the team inside the copy. If the facts are thin or the brand context describes a different product, write a shorter asset from what the brief and context do say.
+- The asset is the thing that gets published, never a note to the marketer. Never write about drafting, missing facts, approvals, "on hold", "we need", or questions for the team inside the copy. If the facts are thin or the brand context describes a different product, write a shorter asset from what the brief and context do say. Never explain the brand's rules in the copy either ("not peer proof", "approved wording", "cross-sector example"): follow them silently.
+- Thin is not the goal. Use every relevant, allowed detail the context gives (how the product works, what the reader does next, concrete specifics from product docs) so the asset is useful, then stop.
 - Plain human language: short sentences, everyday words, the way a sharp person talks. No em dashes or en dashes (use a comma, a full stop or "to"). No extended metaphors, myths or literary set-pieces unless the brief asks for them. No "not X, but Y" or "it's not just X" constructions, no rhetorical question chains, no bullet lists of questions.
 - Lead with the strongest TRUE thing for this audience. A status not yet achieved (e.g. a certification in progress) is a supporting fact, never a headline or subject line, unless the marketer explicitly asks for it.`;
 

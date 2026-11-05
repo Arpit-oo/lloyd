@@ -25,7 +25,7 @@ export async function POST(req: Request) {
   const clash = brandNameTaken(getConfig().dataDir, name);
   if (clash) return json({ error: `There is already a brand called "${clash}". Pick another name, or switch to that brand instead.` }, 409);
 
-  const slug = (name || "brand").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 48) || "brand";
+  const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 48) || "brand";
   const root = uploadedBrandsDir(getConfig().dataDir);
   let dir = path.join(root, slug);
   for (let n = 2; fs.existsSync(dir); n++) dir = path.join(root, `${slug}-${n}`);
@@ -51,6 +51,6 @@ export async function POST(req: Request) {
   }
   if (!saved) return json({ error: "None of those files could be saved." }, 400);
   // Keep the name as typed ("Acme Robotics", not "acme-robotics") for the brand menu.
-  if (name) rememberBrand(getConfig().dataDir, dir, name, false);
+  rememberBrand(getConfig().dataDir, dir, name, false);
   return json({ ok: true, dir, saved });
 }

@@ -1,6 +1,6 @@
 # Build notes
 
-Running log. Feeds the "where an AI tool led me wrong" section of DECISIONS.md.
+Running log of what was tried, measured and changed, day by day. The short version is in DECISIONS.md.
 
 ## Where AI tools led us wrong
 
@@ -49,4 +49,25 @@ Running log. Feeds the "where an AI tool led me wrong" section of DECISIONS.md.
 - Bug found while testing: TaskStop on the npm dev process left the Next server (child) listening on :3000, so a restart silently failed and requests hit the old code. Kill the PID on the port before restarting.
 - Bench run 3 (with live streaming of asset text): 31/33. Brief 2 asked 1 question instead of 2-3, Brief 1 left one asset blocked after its auto-fix. Both passed in run 2; this is run-to-run model variance, worth a second fix round (e.g. two auto-fix rounds) later.
 - Named the platform Lloyd, with a pixel-art bee mascot (logo, favicon, start screen, thinking indicator, perched by the composer on wallpaper themes) and a Settings panel (name for the greeting, mascot on/off, Enter vs Ctrl+Enter, appearance, default models, shortcuts, about).
-- Bug (reported by Arpit): 'Run the brief again' had invisible text on wallpaper themes. Cause: wallpapers set the paper token to transparent, and every ink button used text-paper for its text. Fix: a dedicated on-ink token. Audit added a contrast sweep (scripts/contrast-sweep.mjs) over every visible text element for 10 themes x 2 views; it went from ~150 failures to 0 after the token fix, brighter secondary text on dark wallpapers, deeper skies on Lagoon/Paper Boats/Koi Pond, and glass header/footer bands. Also: the dev server missed a globals.css edit until restarted with .next cleared.
+- Bug (reported by Arpit): 'Run the brief again' had invisible text on wallpaper themes. Cause: wallpapers set the paper token to transparent, and every ink button used text-paper for its text. Fix: a dedicated on-ink token. A one-off contrast sweep (a Playwright script) checked every visible text element for 10 themes x 2 views; it went from ~150 failures to 0 after the token fix, brighter secondary text on dark wallpapers, deeper skies on Lagoon/Paper Boats/Koi Pond, and glass header/footer bands. Also: the dev server missed a globals.css edit until restarted with .next cleared.
+
+## Days 3 and 4 (2026-11-04 to 11-05)
+
+- Shared chats on the local network with live sync (server-sent events and a pulse endpoint), one run at a time enforced server-side (a second message gets a 409), export to Markdown and JSON.
+- Edits became patches that can restructure an asset (add or drop sections), and no-change edits stopped creating versions. Design settings (colours, fonts, density, hero layout) are fields on the template, not model-written HTML; free-form HTML exists behind a server-enforced "this may hurt your brand" confirmation, sandboxed and claim-checked.
+- Ask before going off-brand: "Gen Z slang and monkeys" used to be watered down while the card said "edited". A fast request check now compares each edit with the voice rules and asks first. The same guard rail covers plan changes.
+- The router learned the cases a real chat throws at it: "hi, what can you do?" is small talk, a document attached with a question is a question about the document, a brief sent after small talk is still a brief, several attached briefs get a "which one?" question.
+- Questions card: multi-select, un-pick, your own answer, one send button. Brand-check refusals are asked about ("do you still need any of them?") instead of silently applied.
+- Em dashes: models lean on them and they read as machine-written. Removed deterministically after every write and edit (`src/lib/text/punctuation.ts`), with ranges, list markers, code and links left alone; the writer rules also ban notes to the marketer and myth-style metaphors.
+- Unique brand names, sender names on shared-chat messages, and a real reply to small talk after a campaign is done (it used to answer everything with "how can I help with your campaign?").
+
+## Day 5 (2026-11-06): briefs Lloyd had never seen
+
+Four new briefs (`fixtures/test-briefs/t6` to `t9`), shaped like the samples, run end to end from the terminal. Every trap held (lab qualifiers, no Lowmoor multiple, no combined customer results, expired statistic flagged, banned SOC 2 / GDPR / ROI / "helps prevent" wording, invented quote refused). What they found:
+
+- **The claim check refused true facts.** "It ranks changes that close the most exposure paths for the least work" is verbatim from the Evenburn product doc, and the check blocked it as unsupported, so the auto-fix stripped the email to almost nothing. Cause: its evidence was one embedding of the whole asset, which retrieved facts about the asset's general topic and none of its specific claims. Now it retrieves facts and product passages per paragraph (one batched embedding call), and the same email keeps its detail. It still caught the one thing the writer did invent (a "freshness timestamp").
+- **The internal-target check matched digits, not meaning.** "30 minutes by default" was blocked because a goal said "30 customers". It now flags a number only when it counts the same thing as the target.
+- **Out-of-scope channels.** The brand check judged "a 30-second TikTok video" against brand rules and found none forbidding it, so it said "ok". Which asset types Lloyd makes is an app rule, so it is now answered in code.
+- **Caution cascades.** With no link to the docs, Lloyd asked for one (the brief said "no questions unless you really need one"), and the planner told the writer "do not invent ranking logic", so a product doc's real detail went unused. Missing links are now assumptions, not questions, and plan notes only restrict what a rule restricts.
+- **Rules leaking into copy.** A sales email said "A grocery-sector example, not healthcare peer proof". The writer now follows the rules silently.
+- **A runaway answer.** The bench caught a questions call that started its JSON correctly, then emitted blank lines until it hit 128,000 output tokens, twice (the repair attempt did the same): about $2.50 and a crashed run. Every call now has an output cap (16k unless the step sets its own), and a streamed answer that ends in 400 whitespace characters is stopped at once and retried.

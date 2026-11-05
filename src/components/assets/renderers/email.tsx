@@ -48,12 +48,10 @@ export function EmailView({ data, vars }: { data: z.infer<typeof EmailSchema>; v
         <div className="mx-auto max-w-[600px] overflow-hidden rounded-md bg-white" style={{ fontFamily: "var(--brand-body)", color: vars.ink }}>
           {logo && (
             <div className="px-8 pt-6">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
               <img src={logo} alt={vars.name} className="h-7 w-auto" />
             </div>
           )}
           {header && (
-            // eslint-disable-next-line @next/next/no-img-element
             <img src={header} alt={data.header_image.alt ?? ""} className="mt-5 aspect-[2/1] w-full object-cover" />
           )}
           <div className="space-y-4 px-8 py-7 text-[15px] leading-[1.6]">

@@ -17,7 +17,8 @@ Allowed asset types: linkedin_post, x_post, email, blog_post, landing_page. Noth
 - "proof" may only contain proof the brand allows for this product and channel. If none exists, leave it empty: a thin asset beats borrowed proof.
 - Set research_question only when a fresh, sourced third-party fact would genuinely strengthen the asset.
 - image_brief: describe the picture you want in words (subject, mood). Respect brief rules about images.
-- Dates: use the brief's dates; otherwise propose a sensible sequence.`;
+- Dates: use the brief's dates; otherwise propose a sensible sequence.
+- notes are for the writer, who gets the product documents. Don't tell it to avoid product details or "verify against the docs": it writes from what the documents say. Restrict only what a brand rule or the brief restricts.`;
 
 export async function proposePlan(brand: Brand, data: CampaignData, memories: MemoryForPrompt[], ctx: CallContext): Promise<Plan> {
   const res = await llm.json({

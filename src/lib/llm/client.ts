@@ -82,6 +82,10 @@ const globalForLlm = globalThis as unknown as {
 
 /** A streamed answer with no event for this long is treated as stalled (see the streaming loop below). */
 const STALL_MS = 120_000;
+/** Output cap for calls that don't set their own (reasoning tokens count toward it). */
+const DEFAULT_MAX_OUTPUT_TOKENS = 16_000;
+/** This many whitespace characters in a row means the model is looping (see the streaming loop). */
+const RUNAWAY_WHITESPACE = 400;
 
 function client(): OpenAI {
   globalForLlm.__openai ??= new OpenAI({ apiKey: getConfig().OPENAI_API_KEY, maxRetries: 3, timeout: 180_000 });
@@ -128,7 +132,9 @@ function buildParams(req: BaseRequest, model: string, extra: Partial<ResponseCre
     model,
     input,
     store: false,
-    ...(req.maxOutputTokens ? { max_output_tokens: req.maxOutputTokens } : {}),
+    // Always capped: structured output can degenerate into an endless run of blank lines inside
+    // the JSON (seen once: 128k tokens, about $1.30, for a questions call). The cap bounds that.
+    max_output_tokens: req.maxOutputTokens ?? DEFAULT_MAX_OUTPUT_TOKENS,
     ...(caps.reasoning ? { reasoning: { effort: req.effort ?? "low" } } : {}),
     ...(req.cacheKey ? { prompt_cache_key: req.cacheKey } : {}),
     // Explicit mode only when the caller marked stable blocks; otherwise the default implicit mode.
@@ -227,9 +233,16 @@ async function execute<T>(
         };
         const stream = client().responses.stream({ ...params, stream: true }, { signal });
         let soFar = "";
+        let runaway = false;
         stream.on("event", bump);
         stream.on("response.output_text.delta", (e) => {
           soFar += e.delta;
+          // Hundreds of whitespace characters in a row never belong in an answer: the model is
+          // looping. Stop now instead of paying for tokens up to the cap, and retry once.
+          if (soFar.length > RUNAWAY_WHITESPACE && !/\S/.test(soFar.slice(-RUNAWAY_WHITESPACE))) {
+            runaway = true;
+            stall.abort();
+          }
           onText(soFar);
         });
         try {
@@ -240,7 +253,7 @@ async function execute<T>(
               onText("");
               continue;
             }
-            throw new Error(`The model stopped responding (no output for ${STALL_MS / 1000}s, twice). Try again.`);
+            throw new Error(runaway ? "The model got stuck repeating blank output, twice. Try again." : `The model stopped responding (no output for ${STALL_MS / 1000}s, twice). Try again.`);
           }
           throw err;
         } finally {

@@ -62,7 +62,7 @@
 }
 
 /*
- * Magi style (the default): white canvas, hairline borders, near-black grotesk type, magenta
+ * Lloyd style (the default): white canvas, hairline borders, near-black grotesk type, magenta
  * accent, headings in the sans. Classic is the warm paper look above. Both have light and dark,
  * and wallpapers override the colours with their own tokens either way.
  */
@@ -70,11 +70,11 @@ html {
   --font-ui: var(--font-app-sans);
   --font-display: var(--font-app-serif);
 }
-html.magi {
-  --font-ui: var(--font-magi-sans);
-  --font-display: var(--font-magi-sans);
+html.lloyd {
+  --font-ui: var(--font-lloyd-sans);
+  --font-display: var(--font-lloyd-sans);
 }
-.magi {
+.lloyd {
   --c-paper: #ffffff;
   --c-sidebar: #fafafa;
   --c-panel: #f7f7f8;
@@ -99,7 +99,7 @@ html.magi {
   --c-shadow: 17 17 19;
   color-scheme: light;
 }
-.magi.dark {
+.lloyd.dark {
   --c-paper: #0c0c0e;
   --c-sidebar: #101013;
   --c-panel: #16161a;
@@ -124,11 +124,11 @@ html.magi {
   --c-shadow: 0 0 0;
   color-scheme: dark;
 }
-/* Magi details: round send button, tighter display tracking. */
-.magi [data-send] {
+/* Lloyd details: round send button, tighter display tracking. */
+.lloyd [data-send] {
   border-radius: 9999px;
 }
-.magi .font-serif {
+.lloyd .font-serif {
   font-style: normal;
   letter-spacing: -0.02em;
   font-weight: 500;

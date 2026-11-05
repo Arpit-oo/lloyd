@@ -32,7 +32,6 @@ function SiteNav({ vars, cta, dark = false }: { vars: BrandVars; cta?: string; d
   const invert = dark && !vars.logoDark;
   return (
     <nav className="flex items-center justify-between px-10 py-5">
-      {/* eslint-disable-next-line @next/next/no-img-element */}
       {logo ? <img src={logo} alt={vars.name} className="h-7 w-auto" style={invert ? { filter: "brightness(0) invert(1)" } : undefined} /> : <span className="text-lg font-bold">{vars.name}</span>}
       <div className="flex items-center gap-7 text-sm opacity-80">
         <span>Product</span>
@@ -70,7 +69,6 @@ export function BlogView({ data, vars }: { data: z.infer<typeof BlogSchema>; var
           </div>
         </article>
         {hero && (
-          // eslint-disable-next-line @next/next/no-img-element
           <img src={hero} alt={data.hero_image.alt ?? ""} className="mx-auto -mt-12 mb-12 aspect-[2/1] w-full max-w-[960px] object-cover" />
         )}
         <div className="prose-brand mx-auto max-w-[720px] px-6 pb-20 text-[17px]">
@@ -136,7 +134,6 @@ export function LandingView({ data, vars }: { data: z.infer<typeof LandingSchema
         <SiteNav vars={vars} cta={data.hero.primary_cta} dark={dark} />
         {onImage ? (
           <section className="relative overflow-hidden" style={{ minHeight: vars.density === "roomy" ? 560 : vars.density === "compact" ? 380 : 470 }}>
-            {/* eslint-disable-next-line @next/next/no-img-element */}
             <img src={hero!} alt={data.hero.image.alt ?? ""} className="absolute inset-0 h-full w-full object-cover" />
             <div className="absolute inset-0 bg-black/55" />
             <div className={`relative text-white ${PAD[vars.density]}`}>{copy}</div>
@@ -145,7 +142,6 @@ export function LandingView({ data, vars }: { data: z.infer<typeof LandingSchema
           <section className={`${PAD[vars.density]} !pt-10`}>
             {copy}
             {hero && (
-              // eslint-disable-next-line @next/next/no-img-element
               <img src={hero} alt={data.hero.image.alt ?? ""} className="mx-auto mt-12 aspect-[16/8] w-full max-w-[960px] object-cover" style={{ borderRadius: r.card }} />
             )}
           </section>
@@ -153,7 +149,6 @@ export function LandingView({ data, vars }: { data: z.infer<typeof LandingSchema
           <section className={`grid items-center gap-10 ${PAD[vars.density]} !pt-10 ${hero ? "md:grid-cols-[1.1fr_1fr]" : ""}`}>
             {copy}
             {hero && (
-              // eslint-disable-next-line @next/next/no-img-element
               <img src={hero} alt={data.hero.image.alt ?? ""} className="aspect-[4/3] w-full object-cover" style={{ borderRadius: r.card }} />
             )}
           </section>

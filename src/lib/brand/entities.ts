@@ -5,8 +5,8 @@ import type { BrandDB } from "./store";
 /**
  * Registry of named things (company, products, events, features) with their current names,
  * former names and status. Renames are an entity-level fact that sentence similarity misses:
- * old posts say "Tallowatch finds risky configs", the new guide says "the posture product is
- * Evenburn", and those sentences are not alike. The registry also feeds a deterministic guard
+ * old posts say "Oldname finds risky configs", the new guide says "the posture product is
+ * Newname", and those sentences are not alike. The registry also feeds a deterministic guard
  * check: a former name in new copy is flagged without a model call.
  */
 export const EntitySchema = z.object({

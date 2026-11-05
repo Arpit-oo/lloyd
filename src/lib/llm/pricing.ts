@@ -43,10 +43,6 @@ export function priceOf(model: string): { input: number; cachedInput: number; ou
   return p ? { input: p.input, cachedInput: p.cachedInput, output: p.output } : null;
 }
 
-export function hasPrice(model: string): boolean {
-  return Boolean(lookup(model));
-}
-
 /** Cost in USD. Unknown models return 0 and are flagged by the caller. */
 export function costUSD(model: string, u: TokenUsage): number {
   const p = lookup(model);

@@ -17,7 +17,6 @@ function Avatar({ vars, size, round }: { vars: BrandVars; size: number; round?: 
       style={{ width: size, height: size }}
     >
       {src ? (
-        // eslint-disable-next-line @next/next/no-img-element
         <img src={src} alt="" className="h-full w-full object-contain p-1.5" />
       ) : (
         <span className="font-bold" style={{ color: vars.primary }}>{vars.name[0]}</span>
@@ -55,7 +54,6 @@ export function LinkedInPost({ data, vars }: { data: z.infer<typeof LinkedInSche
         )}
       </div>
       {img && (
-        // eslint-disable-next-line @next/next/no-img-element
         <img src={img} alt={data.image.alt ?? ""} className="aspect-[1.91/1] w-full object-cover" />
       )}
       {data.link && !img && (
@@ -97,7 +95,6 @@ export function XPost({ data, vars }: { data: z.infer<typeof XSchema>; vars: Bra
             </div>
             <div className="mt-0.5 whitespace-pre-wrap leading-snug">{p.text}</div>
             {i === 0 && img && (
-              // eslint-disable-next-line @next/next/no-img-element
               <img src={img} alt={data.image.alt ?? ""} className="mt-3 aspect-video w-full rounded-2xl border border-black/10 object-cover" />
             )}
             <div className="mt-3 flex max-w-[425px] justify-between text-[13px] text-black/50">

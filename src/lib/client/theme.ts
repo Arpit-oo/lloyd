@@ -10,8 +10,8 @@ import { SCENES, type Scene } from "./wallpapers";
  * warm theme follows the mode. Both are stored in localStorage and applied on <html>.
  */
 export type ThemeChoice = "light" | "dark" | "system";
-/** Magi: the white, magenta-accented product look (default). Classic: the warm paper look. */
-export type StyleChoice = "magi" | "classic";
+/** Lloyd: the white, magenta-accented product look (default). Classic: the warm paper look. */
+export type StyleChoice = "lloyd" | "classic";
 
 export interface Appearance {
   mode: ThemeChoice;
@@ -27,7 +27,7 @@ export function sceneById(id: string | null): Scene | null {
 
 function apply({ mode, wallpaper, style }: Appearance) {
   const root = document.documentElement;
-  root.classList.toggle("magi", style !== "classic");
+  root.classList.toggle("lloyd", style !== "classic");
   const scene = sceneById(wallpaper);
   TOKEN_KEYS.forEach((k) => root.style.removeProperty(k));
   root.classList.toggle("wall", !!scene);
@@ -41,11 +41,11 @@ function apply({ mode, wallpaper, style }: Appearance) {
 }
 
 function read(): Appearance {
-  if (typeof window === "undefined") return { mode: "system", wallpaper: null, style: "magi" };
+  if (typeof window === "undefined") return { mode: "system", wallpaper: null, style: "lloyd" };
   return {
     mode: (localStorage.getItem("theme") as ThemeChoice | null) ?? "system",
     wallpaper: localStorage.getItem("wallpaper"),
-    style: localStorage.getItem("style") === "classic" ? "classic" : "magi",
+    style: localStorage.getItem("style") === "classic" ? "classic" : "lloyd",
   };
 }
 

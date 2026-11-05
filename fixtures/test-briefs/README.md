@@ -1,6 +1,6 @@
 # Messy test briefs
 
-Five briefs written to be harder than the three samples: pasted Slack threads, forwarded email chains, stakeholders who disagree, typos, stale numbers, retired names, and requests the brand's legal docs forbid. Every trap below is grounded in a real rule in the Wickhold brand folder, so a correct answer exists for each.
+Nine briefs written to be harder than the three samples: pasted Slack threads, forwarded email chains, stakeholders who disagree, typos, stale numbers, retired names, and requests the brand's legal docs forbid. Every trap below is grounded in a real rule in the Wickhold brand folder, so a correct answer exists for each.
 
 Use them in the app (drag the file into a new campaign) or from the terminal:
 
@@ -10,7 +10,7 @@ npm run brief -- fixtures/test-briefs/t3-breach-hook-rushed.md --answers "use de
 
 LLM output varies a little between runs. "Should" below is what a correct run does; if Lloyd misses one, that is a real finding.
 
-## t1-eu-push-slack-dump.md — EU push, pasted from Slack
+## t1-eu-push-slack-dump.md: EU push, pasted from Slack
 
 Tests: reading a noisy chat paste, self-contradicting asks, regional rules, statistic expiry.
 
@@ -26,7 +26,7 @@ Tests: reading a noisy chat paste, self-contradicting asks, regional rules, stat
 | "one email … actually two", "skip X … actually do one" | Plan settles it (or asks once); doesn't produce both readings | — |
 | "Frankfurt region live (i think?)" | Not stated as fact; asked about or left out | unverifiable |
 
-## t2-leashgate-forward-chain.md — forwarded email chain, three stakeholders disagree
+## t2-leashgate-forward-chain.md: forwarded email chain, three stakeholders disagree
 
 Tests: good questions (the audience genuinely conflicts), founder pressure, early-access rules.
 
@@ -39,7 +39,7 @@ Tests: good questions (the audience genuinely conflicts), founder pressure, earl
 | CISOs vs platform engineers | **Asks** who it's for (this changes every asset), with a default | — |
 | "Pick the assets" | Plan proposes a small set with a reason for each | — |
 
-## t3-breach-hook-rushed.md — newsjacking a breach
+## t3-breach-hook-rushed.md: newsjacking a breach
 
 Tests: the hardest refusal. The brief's whole angle is banned, so Lloyd should ask what to lead with instead of quietly writing a watered-down version.
 
@@ -56,7 +56,7 @@ Tests: the hardest refusal. The brief's whole angle is banned, so Lloyd should a
 | "Ship today, approvals later" | Customer names still go to Legal; noted | approved claims §9 |
 | Centerpiece removed | **Asks** what to lead with instead | agent behaviour |
 
-## t4-kubecon-vague.txt — one line, plain text, typos
+## t4-kubecon-vague.txt: one line, plain text, typos
 
 Tests: a `.txt` brief, a vague request, channels outside the brief's scope.
 
@@ -66,7 +66,7 @@ Tests: a `.txt` brief, a vague request, channels outside the brief's scope.
 | "short video", "paid linkedin ads" | Explains those aren't asset types it makes; plans only posts, blogs, landing pages and emails |
 | "kubecon" booth follow-up | Uses the events playbook's after-the-show guidance, no pitchy opener |
 
-## t5-old-names-and-stale-stats.md — old names, old guidelines, stale stats
+## t5-old-names-and-stale-stats.md: old names, old guidelines, stale stats
 
 Tests: authority order (a file called FINAL doesn't win), retired names, statistic expiry.
 
@@ -82,3 +82,46 @@ Tests: authority order (a file called FINAL doesn't win), retired names, statist
 | 41% stat in a **May 20, 2027** email | Flagged as expired by then | approved claims §5 |
 | "SOC 2 certified and audit-ready" | "holds SOC 2 Type II"; "audit-ready" refused | approved claims §3, §7 |
 | Six deliverables | Plan can keep them all (it's specific) and asks nothing it doesn't need | — |
+
+## t6-quenchline-contain-mode-detailed.md: a detailed brief with bad asks inside it
+
+Tests: a brief shaped like the samples (asset table, dates, reviewers) whose key messages break the claims rules, plus two channels Lloyd doesn't make.
+
+| Trap | Should happen | Rule |
+|---|---|---|
+| "lightweight and real-time containment, so nothing slows down" | "Lightweight" only with the CPU figure and "in Wickhold lab benchmarks, 2026"; "real-time" refused for containment | approved claims §2, §7 |
+| Lowmoor as "about 20x faster" | Refused: no multiples; keep the 220-node scope | approved claims §2 |
+| Ostler's 63% next to Lowmoor "as one big result" | Refused: never combine the two results | approved claims §2 |
+| 41% stat at the top of a **May 12, 2027** blog | Flagged as expired (usable through April 14, 2027) | approved claims §5 |
+| 30-second TikTok video, press release | Refused as out of scope (Lloyd makes posts, blogs, landing pages, emails) and left out of the plan | the brief |
+| "30 customers… 15 demo requests" | Never in copy | internal goal |
+| Tesserline | Not named | the brief, competitive positioning |
+
+## t7-budget-season-vague.md: four sentences, no assets, no dates
+
+| Should happen |
+|---|
+| Asks 2–3 questions (product, which assets, what the reader does next), each with a default |
+| Proposes a small mix that matches "nothing heavy" |
+| No savings or ROI claims from the "budget" framing |
+
+## t8-healthcare-sales-ask.md: a sales rep's lowercase ask, almost every claim banned
+
+| Trap | Should happen | Rule |
+|---|---|---|
+| Subject "Used by your peers in healthcare" | Refused: no approved healthcare customer | approved claims §7 |
+| "SOC 2 certified and audit-ready" | "holds SOC 2 Type II"; "audit-ready" refused | approved claims §3, §7 |
+| "helps prevent misconfigurations", "automatic remediation" | Both refused; Evenburn reports a fix order and people fix | approved claims §3, §7 |
+| "GDPR compliant" | "supports customers' GDPR obligations" | regional rules |
+| Invented Ostler CTO quote | Refused; only the approved quote from the approved speaker | logo and quote policy |
+| "save around $200k a year" | Refused: no ROI figures | approved claims §3 |
+| "12 meetings" | Never in copy | internal goal |
+| Explaining the rules in the copy ("not healthcare peer proof") | Never: the copy follows the rules silently | writer rules |
+
+## t9-one-email-only.md: one asset, "no questions unless you really need one"
+
+| Should happen |
+|---|
+| Zero questions (a missing docs link is not a reason to ask) |
+| A plan of exactly one email |
+| The email uses the product doc's real detail on reading the fix order, and nothing beyond it |

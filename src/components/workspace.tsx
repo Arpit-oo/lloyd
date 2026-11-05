@@ -286,7 +286,7 @@ export function Workspace() {
       onMemory={() => setPanel("memory")}
       onInspector={() => setPanel("inspector")}
       inspectorEnabled={!!view}
-      themeName={scene?.name ?? (appearance.style === "magi" ? { light: "Magi", dark: "Magi Dark", system: "Magi · System" } : { light: "Paper", dark: "Night", system: "System" })[appearance.mode]}
+      themeName={scene?.name ?? (appearance.style === "lloyd" ? { light: "Lloyd", dark: "Lloyd Dark", system: "Lloyd · System" } : { light: "Paper", dark: "Night", system: "System" })[appearance.mode]}
       onThemes={() => {
         setThemesOpen(true);
         if (mobile) setSidebarOpen(false);

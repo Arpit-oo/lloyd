@@ -524,7 +524,6 @@ function Sources({ sources }: { sources: Sources | null }) {
         <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted">Image shortlist (after usage-rule filters)</h3>
         <div className="flex flex-wrap gap-2">
           {sources.imageCandidates.map((id) => (
-            // eslint-disable-next-line @next/next/no-img-element
             <img key={id} src={`/api/images/${id}`} alt={id} title={id} className="h-16 w-24 rounded object-cover ring-1 ring-line" />
           ))}
         </div>
