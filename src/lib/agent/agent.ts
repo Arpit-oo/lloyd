@@ -9,7 +9,7 @@ import { draftText } from "@/lib/text/partial-json";
 import { humanizeContent } from "@/lib/text/punctuation";
 import { ASSET_LABEL, ASSET_SCHEMAS, ASSET_TYPES, type AssetContent, type AssetType } from "./asset-types";
 import { getAttachments, linkAttachments, renderAttachments, toReferences } from "./attachments";
-import { CONFIRM_REPLIES } from "./confirm";
+import { CONFIRM_REPLIES, isButtonReply } from "./confirm";
 import { mergeStyle } from "./design";
 import { readNewLinks, referenceUrls, type Reference } from "./references";
 import { checkBrief, OUT_OF_SCOPE_RULE } from "./steps/brand-check";
@@ -150,10 +150,10 @@ export async function handleMessage(campaignId: string, text: string, emit: Emit
         // Anything else: drop the question and treat it as a new message.
       }
       // A reply to the router's own clarifying question: route the original request with the answer, and never ask twice.
-      const clarify = campaign.data.pendingClarify;
-      if (clarify) store.updateCampaign(campaignId, { data: { pendingClarify: null } });
+      const clarify = isButtonReply(text) ? null : campaign.data.pendingClarify;
+      if (campaign.data.pendingClarify) store.updateCampaign(campaignId, { data: { pendingClarify: null } });
       const routed = clarify
-        ? `${clarify.request}\n\n(You asked: "${clarify.question}" They answered: "${text}". Act now. If the answer doesn't settle it, e.g. "yes" to an either/or question, pick the option that fits the brief best and say which in the instruction.)`
+        ? `${clarify.request}\n\n(You asked: "${clarify.question}" They answered: "${text}". Act now. If the answer doesn't settle it, e.g. "yes" to an either/or question, pick the option that fits the brief best and say which in the instruction. If their answer is a new, unrelated request instead, act on that alone.)`
         : text;
       const route = await routeMessage(
         { state: campaign.state, message: routed, plan: campaign.data.plan, assets: store.listAssets(campaignId), recent: recentTranscript(campaignId, 8), brief: campaign.data.briefText, attachments: docs.map((d) => ({ name: d.name, text: d.text })) },

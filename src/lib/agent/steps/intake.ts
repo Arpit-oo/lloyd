@@ -5,7 +5,7 @@ import { StructuredBriefSchema, type StructuredBrief } from "../types";
 /** Reads the brief into a structured form. Pure reading: no judgments about the brand yet. */
 const RULES = `You read marketing campaign briefs and turn them into structured data.
 Be faithful: copy constraints, dates, names and claims close to verbatim. Do not add ideas of your own.
-Allowed asset types are social posts (LinkedIn, X), blog posts, landing pages and emails; anything else is type "other".
+Allowed asset types are social posts (LinkedIn, X), blog posts, landing pages and emails; anything else is type "other". "X post", "x post", "tweet" or "thread" is a post on X (Twitter); "1 x post" means one X post, not "times".
 Mark as an override only where the brief explicitly says it takes precedence over brand documents, and quote it.
 "requested_claims" = every specific claim, certification, customer, quote, statistic or result the brief wants used.`;
 

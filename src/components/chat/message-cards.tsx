@@ -1,6 +1,6 @@
 "use client";
 
-import { CONFIRM_REPLIES } from "@/lib/agent/confirm";
+import { CONFIRM_REPLIES, PLAN_REPLIES } from "@/lib/agent/confirm";
 import { Brain, Check, CheckCircle2, ChevronDown, ChevronRight, FileText, Pencil, ShieldAlert, ShieldCheck, Sparkles, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import ReactMarkdown from "react-markdown";
@@ -289,11 +289,11 @@ function PlanCard({ plan, onReply, live, estimate }: { plan: Plan; onReply: (t: 
       {live && (
         <div className="mt-3.5 flex flex-wrap items-center gap-3">
           {drop.size > 0 ? (
-            <button onClick={() => onReply(`Remove these from the plan: ${plan.items.filter((i) => drop.has(i.id)).map((i) => i.title).join("; ")}`)} className="rounded-lg bg-ink px-4 py-2 text-[14px] font-semibold text-on-ink">
+            <button onClick={() => onReply(`${PLAN_REPLIES.removePrefix}${plan.items.filter((i) => drop.has(i.id)).map((i) => i.title).join("; ")}`)} className="rounded-lg bg-ink px-4 py-2 text-[14px] font-semibold text-on-ink">
               Update plan ({drop.size} removed)
             </button>
           ) : (
-            <button onClick={() => onReply("Looks good. Write it.")} className="flex items-center gap-2 rounded-lg bg-accent px-4 py-2 text-[14px] font-semibold text-on-accent hover:brightness-95">
+            <button onClick={() => onReply(PLAN_REPLIES.approve)} className="flex items-center gap-2 rounded-lg bg-accent px-4 py-2 text-[14px] font-semibold text-on-accent hover:brightness-95">
               <CheckCircle2 size={16} /> Approve and write {plan.items.length} asset{plan.items.length === 1 ? "" : "s"}
             </button>
           )}

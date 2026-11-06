@@ -15,3 +15,13 @@ export interface PendingEdit {
   assetIds: string[];
   conflicts: { rule: string; source_doc: string | null; affects: string[] }[];
 }
+
+/** Texts the plan card's buttons send. A button click is never the answer to a pending clarifying question. */
+export const PLAN_REPLIES = {
+  approve: "Looks good. Write it.",
+  removePrefix: "Remove these from the plan: ",
+} as const;
+
+export function isButtonReply(text: string): boolean {
+  return text === PLAN_REPLIES.approve || text.startsWith(PLAN_REPLIES.removePrefix) || Object.values(CONFIRM_REPLIES).includes(text as never);
+}
