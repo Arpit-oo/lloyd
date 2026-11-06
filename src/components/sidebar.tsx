@@ -2,6 +2,7 @@
 
 import { Brain, Check, ChevronsUpDown, FolderPlus, Library, Loader2, MoreHorizontal, Palette, PanelLeftClose, Pencil, ScrollText, Search, Settings, SquarePen, Trash2 } from "lucide-react";
 import { listBrands, switchBrand, type BrandList } from "@/lib/client/brands";
+import Link from "next/link";
 import { Bee } from "./brand/bee";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { CampaignListItem } from "@/lib/client/types";
@@ -41,10 +42,10 @@ export function Sidebar({ campaigns, activeId, onOpen, onNew, onRename, onDelete
   return (
     <nav aria-label="Campaigns" data-glass className="flex h-full w-full flex-col bg-sidebar">
       <div className="flex items-center justify-between px-3 pb-2 pt-3">
-        <span className="flex items-center gap-2 pl-1">
+        <Link href="/" title="Lloyd home page" className="flex items-center gap-2 rounded-lg py-0.5 pl-1 pr-2 hover:bg-ink/5">
           {showMascot && <Bee size={22} />}
           <span className="font-serif text-[19px] font-semibold">Lloyd</span>
-        </span>
+        </Link>
         <button onClick={onClose} aria-label="Close sidebar" title="Close sidebar (Ctrl+B)" className="rounded-lg p-1.5 max-sm:p-2.5 text-muted hover:bg-ink/5 hover:text-ink">
           <PanelLeftClose size={18} />
         </button>
