@@ -37,6 +37,14 @@ export function listMemories(brandHash: string, statuses: MemoryStatus[] = ["act
     .all(brandHash, ...statuses) as Memory[];
 }
 
+/** Type and text of the given memories, in the given order (ids since deleted are skipped). */
+export function memoriesByIds(ids: string[]): { type: MemoryType; text: string }[] {
+  if (!ids.length) return [];
+  const rows = db().prepare(`SELECT id, type, text FROM memories WHERE id IN (${ids.map(() => "?").join(",")})`).all(...ids) as { id: string; type: MemoryType; text: string }[];
+  const byId = new Map(rows.map((r) => [r.id, r]));
+  return ids.flatMap((id) => { const r = byId.get(id); return r ? [{ type: r.type, text: r.text }] : []; });
+}
+
 export function memoriesForPrompt(brandHash: string): MemoryForPrompt[] {
   return listMemories(brandHash, ["active"]).slice(0, MAX_INJECTED).map(({ id, type, text }) => ({ id, type, text }));
 }

@@ -5,6 +5,7 @@ import { campaignCost, estimatePlan } from "@/lib/costs";
 import { db } from "@/lib/db";
 import { DEFAULT_SETTINGS } from "@/lib/llm/catalog";
 import { json } from "@/lib/http/sse";
+import { memoriesByIds } from "@/lib/memory/store";
 
 /**
  * Everything the campaign screen needs in one request: state, chat, assets, cost, estimate, and
@@ -21,7 +22,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
   const turns = db().prepare("SELECT run_id, SUM(cost_usd) usd FROM llm_calls WHERE campaign_id = ? GROUP BY run_id").all(id) as { run_id: string; usd: number }[];
   return json({
     campaign,
-    messages: listMessages(id),
+    messages: withMemoryList(listMessages(id), campaign.data.memoryIds ?? []),
     assets,
     cost: campaignCost(id),
     turnCost: Object.fromEntries(turns.map((t) => [t.run_id, t.usd])),
@@ -48,4 +49,14 @@ export async function DELETE(_req: Request, { params }: { params: Promise<{ id: 
   stopRun(id);
   deleteCampaign(id);
   return json({ ok: true });
+}
+
+/** Questions cards saved before the card listed its memories get the list from the campaign's memory ids. */
+function withMemoryList(messages: ReturnType<typeof listMessages>, memoryIds: string[]) {
+  if (!memoryIds.length) return messages;
+  return messages.map((m) => {
+    const c = m.content as { memoriesUsed?: number; memoryList?: unknown } | null;
+    if (m.kind !== "questions" || !c?.memoriesUsed || c.memoryList) return m;
+    return { ...m, content: { ...c, memoryList: memoriesByIds(memoryIds) } };
+  });
 }
