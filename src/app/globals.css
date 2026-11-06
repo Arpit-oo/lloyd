@@ -187,8 +187,11 @@ textarea:focus-visible,
 input:focus-visible {
   outline: none;
 }
-textarea {
-  caret-color: var(--c-accent);
+/* The text colour, not the accent: a thin accent-coloured caret next to grey placeholder text
+   all but disappears on light themes. */
+textarea,
+input {
+  caret-color: var(--c-ink);
 }
 .tabular {
   font-variant-numeric: tabular-nums;
