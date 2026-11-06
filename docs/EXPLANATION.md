@@ -45,7 +45,7 @@ The hard problem it solves: the brand folder is ~145k tokens across 84 documents
 ```
 
 **Two databases on purpose.** The brand index is built once per brand folder and never changes during a campaign. The app database holds everything a user creates. Switching brands swaps the first; the second keeps each brand's campaigns apart by brand hash.
-
+r
 ### Tech stack and why
 
 | Piece | Choice | Why |

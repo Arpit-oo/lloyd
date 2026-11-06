@@ -1,7 +1,7 @@
 "use client";
 
 import { CONFIRM_REPLIES } from "@/lib/agent/confirm";
-import { Brain, Check, CheckCircle2, ChevronRight, FileText, Pencil, ShieldAlert, ShieldCheck, Sparkles, X } from "lucide-react";
+import { Brain, Check, CheckCircle2, ChevronDown, ChevronRight, FileText, Pencil, ShieldAlert, ShieldCheck, Sparkles, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import { ASSET_LABEL } from "@/lib/agent/asset-types";
@@ -31,7 +31,7 @@ export function MessageCard({ m, me = "", sender, onReply, onOpenAsset, live, es
     case "brand_check":
       return <BrandCheckCard items={c.items as BrandCheckItem[]} />;
     case "questions":
-      return <QuestionsCard q={c as unknown as Questions & { memoriesUsed?: number }} onReply={onReply} live={live} />;
+      return <QuestionsCard q={c as unknown as Questions & { memoriesUsed?: number; memoryList?: { type: string; text: string }[] }} onReply={onReply} live={live} />;
     case "plan":
       return <PlanCard plan={c.plan as Plan} onReply={onReply} live={live} estimate={estimate} />;
     case "assets":
@@ -158,7 +158,7 @@ function BrandCheckCard({ items }: { items: BrandCheckItem[] }) {
   );
 }
 
-function QuestionsCard({ q, onReply, live }: { q: Questions & { memoriesUsed?: number }; onReply: (t: string) => void; live: boolean }) {
+function QuestionsCard({ q, onReply, live }: { q: Questions & { memoriesUsed?: number; memoryList?: { type: string; text: string }[] }; onReply: (t: string) => void; live: boolean }) {
   // Each answer is a list: one item for single-choice questions, any number for multi-select ones.
   // Clicking a picked option again un-picks it. "Own" is a typed answer, sent alongside any picks.
   const [answers, setAnswers] = useState<Record<string, string[]>>({});
@@ -180,9 +180,22 @@ function QuestionsCard({ q, onReply, live }: { q: Questions & { memoriesUsed?: n
   return (
     <Card icon={<Sparkles size={17} className="text-accent" />} title={n ? `Before I plan: ${n} question${n > 1 ? "s" : ""}` : "I have what I need. Here is what I assumed"}>
       {q.memoriesUsed ? (
-        <div className="mb-3 flex items-center gap-1.5 text-[13px] text-accent-ink">
-          <Brain size={14} /> Using {q.memoriesUsed} thing{q.memoriesUsed > 1 ? "s" : ""} you told me in earlier campaigns
-        </div>
+        <details className="group mb-3 text-[13px]">
+          <summary className="flex cursor-pointer list-none items-center gap-1.5 text-accent-ink hover:underline">
+            <Brain size={14} /> Using {q.memoriesUsed} thing{q.memoriesUsed > 1 ? "s" : ""} you told me in earlier campaigns
+            {q.memoryList?.length ? <ChevronDown size={14} className="transition-transform group-open:rotate-180" /> : null}
+          </summary>
+          {q.memoryList?.length ? (
+            <ul className="mt-2 space-y-1.5 rounded-lg border border-line bg-panel px-3 py-2.5">
+              {q.memoryList.map((m, i) => (
+                <li key={i} className="flex gap-2">
+                  <span className="mt-px shrink-0 rounded bg-accent-soft px-1.5 text-[11px] font-medium leading-5 text-accent-ink">{m.type}</span>
+                  <span className="text-ink">{m.text}</span>
+                </li>
+              ))}
+            </ul>
+          ) : null}
+        </details>
       ) : null}
       <div className="space-y-5">
         {q.questions.map((x) => (

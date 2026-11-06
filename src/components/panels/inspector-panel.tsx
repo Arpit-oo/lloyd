@@ -24,7 +24,7 @@ export function InspectorPanel({ view, onClose }: { view: CampaignView; onClose:
     <Modal title="Inspector" subtitle={`${view.campaign.title}: ${calls.length} model calls · ${usd(cost.totalUSD)} total · ${Math.round(cost.cacheHitRate * 100)}% of input tokens read from cache`} onClose={onClose}>
       <div className="mb-4 flex gap-1 rounded-lg bg-surface p-1 ring-1 ring-line">
         {(["calls", "costs"] as const).map((t) => (
-          <button key={t} onClick={() => setTab(t)} className={`flex-1 rounded-md px-3 py-2 text-sm capitalize ${tab === t ? "bg-ink font-semibold text-on-ink" : "text-muted"}`}>
+          <button key={t} onClick={() => setTab(t)} aria-pressed={tab === t} className={`flex-1 whitespace-nowrap rounded-md px-3 py-2 text-[15px] ${tab === t ? "bg-ink font-semibold text-on-ink" : "font-medium text-ink/80 hover:bg-ink/5 hover:text-ink"}`}>
             {t === "calls" ? "Prompts sent" : "Cost by step"}
           </button>
         ))}

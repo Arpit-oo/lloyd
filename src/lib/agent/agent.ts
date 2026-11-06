@@ -291,10 +291,10 @@ async function startFromBrief(brand: Brand, t: Turn, briefText: string) {
   store.updateCampaign(t.campaignId, { data: { questions } });
 
   if (questions.questions.length) {
-    t.say("assistant", "questions", { ...questions, memoriesUsed: memories.length });
+    t.say("assistant", "questions", { ...questions, memoriesUsed: memories.length, memoryList: memories.map(({ type, text }) => ({ type, text })) });
     t.setState("clarifying");
   } else {
-    if (questions.assumptions.length || memories.length) t.say("assistant", "questions", { ...questions, memoriesUsed: memories.length });
+    if (questions.assumptions.length || memories.length) t.say("assistant", "questions", { ...questions, memoriesUsed: memories.length, memoryList: memories.map(({ type, text }) => ({ type, text })) });
     await plan(brand, t);
   }
 }

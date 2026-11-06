@@ -9,6 +9,15 @@ import { BrandSwitcher } from "./brand-switcher";
 
 type Tab = "authority" | "conflicts" | "names" | "images" | "kernel" | "switch";
 
+/** One plain sentence per tab, so the panel explains itself. */
+const HINT: Partial<Record<Tab, string>> = {
+  authority: "When two documents disagree, the one higher on this list wins. Lloyd read this order from the brand's own rules, not from file names or dates. You can move a document to another level.",
+  conflicts: "Places where the documents contradict each other. Green is what Lloyd uses, red is what it ignores, and each one says which rule decided it.",
+  names: "Every product and term, with its current name. If an old name (on the right) shows up in new copy, the claim check blocks it, without asking the model.",
+  images: "Every image in the brand folder. Lloyd picks images from here; it never generates them. Excluded images break a usage rule and are never offered.",
+  kernel: "The short summary of the brand that goes into every prompt. Everything else is looked up per asset.",
+};
+
 /** Shows what the brand layer derived from the folder, with evidence, so a person can check it. */
 export function BrandPanel({ brand, onClose, onChanged, initialTab = "authority" }: { brand: BrandView; onClose: () => void; onChanged: () => void; initialTab?: Tab }) {
   const [tab, setTab] = useState<Tab>(initialTab);
@@ -30,18 +39,18 @@ export function BrandPanel({ brand, onClose, onChanged, initialTab = "authority"
             ["switch", "Switch brand"],
           ] as [Tab, string][]
         ).map(([t, label]) => (
-          <button key={t} onClick={() => setTab(t)} className={`flex-1 rounded-md px-3 py-2 text-sm ${tab === t ? "bg-ink font-semibold text-on-ink" : "text-muted hover:text-ink"}`}>
+          <button key={t} onClick={() => setTab(t)} aria-pressed={tab === t} className={`flex-1 whitespace-nowrap rounded-md px-3 py-2 text-[15px] ${tab === t ? "bg-ink font-semibold text-on-ink" : "font-medium text-ink/80 hover:bg-ink/5 hover:text-ink"}`}>
             {label}
           </button>
         ))}
       </div>
+      {HINT[tab] && <p className="mb-5 max-w-3xl text-[15px] leading-relaxed text-ink/80">{HINT[tab]}</p>}
       {tab === "authority" && <Authority brand={brand} onChanged={onChanged} />}
       {tab === "conflicts" && <Conflicts brand={brand} />}
       {tab === "names" && <Names brand={brand} />}
       {tab === "images" && <Images brand={brand} />}
       {tab === "switch" && <BrandSwitcher />}
-      {tab === "kernel" && <p className="mb-3 text-sm text-muted">The short summary of the brand that goes into every prompt. Everything else is looked up per asset.</p>}
-      {tab === "kernel" && <pre className="whitespace-pre-wrap rounded-xl bg-surface p-6 font-mono text-[12px] leading-relaxed ring-1 ring-line">{brand.kernel}</pre>}
+      {tab === "kernel" && <pre className="whitespace-pre-wrap rounded-xl bg-surface p-6 font-mono text-[13px] leading-relaxed ring-1 ring-line">{brand.kernel}</pre>}
     </Modal>
   );
 }
@@ -97,11 +106,11 @@ function Authority({ brand, onChanged }: { brand: BrandView; onChanged: () => vo
           )}
         </div>
       )}
-      <div className="rounded-xl bg-surface p-5 text-sm ring-1 ring-line">
+      <div className="rounded-xl bg-surface p-5 text-[15px] ring-1 ring-line">
         <div className="font-semibold">
           Order of authority: {g.source === "explicit" ? "taken from the brand's own governance rules" : g.source === "partly_explicit" ? "partly stated by the brand, partly inferred" : "inferred from document types (no explicit rule found)"} · confidence {g.confidence}
         </div>
-        <ul className="mt-3 space-y-1.5 text-ink/80">
+        <ul className="mt-3 space-y-2 leading-relaxed text-ink/85">
           {g.principles.map((p, i) => <li key={i}>• {p}</li>)}
         </ul>
         {g.supersessions.length > 0 && (
@@ -118,10 +127,10 @@ function Authority({ brand, onChanged }: { brand: BrandView; onChanged: () => vo
             <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-ink text-xs font-bold text-on-ink">{t.rank}</span>
             <div>
               <div className="font-semibold">{t.name}</div>
-              <div className="text-xs text-muted">{t.evidence ? `“${t.evidence}”` : "inferred"}</div>
+              <div className="text-[13px] text-muted">{t.evidence ? `“${t.evidence}”` : "inferred"}</div>
             </div>
           </div>
-          <ul className="grid gap-x-6 gap-y-1 px-5 py-3 text-xs md:grid-cols-2">
+          <ul className="grid gap-x-6 gap-y-1.5 px-5 py-3 text-[13px] md:grid-cols-2">
             {(byTier.get(t.rank) ?? []).map((d) => (
               <li key={d.id} className="flex items-center gap-2" title={d.reason}>
                 <select value={d.tier} onChange={(e) => move(d.id, Number(e.target.value))} className="shrink-0 rounded border border-line bg-surface px-1 py-0.5 text-[11px]" aria-label={`Tier for ${d.id}`}>
@@ -150,12 +159,12 @@ function Conflicts({ brand }: { brand: BrandView }) {
               <span className="rounded-full bg-panel px-2 py-0.5 text-[11px] uppercase text-muted ring-1 ring-line">{c.resolution.confidence}</span>
               {c.needsUser && <span className="rounded-full bg-warn-soft px-2 py-0.5 text-[12px] font-semibold text-warn">needs a decision</span>}
             </div>
-            <p className="mt-1 text-sm">{c.resolution.explanation}</p>
-            <div className="mt-1 text-xs text-muted">Decided by: {c.resolution.rule_applied}</div>
+            <p className="mt-1.5 text-[15px] leading-relaxed">{c.resolution.explanation}</p>
+            <div className="mt-1 text-[13px] text-muted">Decided by: {c.resolution.rule_applied}</div>
             <div className="mt-3 grid gap-2 md:grid-cols-2">
               {c.facts.map((f) => (
-                <div key={f.id} className={`rounded-lg p-3 text-xs ring-1 ${winners.has(f.id) ? "bg-ok-soft ring-ok/25" : "bg-bad-soft ring-bad/25"}`}>
-                  <div className="mb-1 flex items-center gap-2 font-mono text-[11px] text-muted">
+                <div key={f.id} className={`rounded-lg p-3.5 text-[14px] leading-relaxed ring-1 ${winners.has(f.id) ? "bg-ok-soft ring-ok/25" : "bg-bad-soft ring-bad/25"}`}>
+                  <div className="mb-1.5 flex items-center gap-2 font-mono text-[12px] text-muted">
                     <span className={`font-sans font-semibold ${winners.has(f.id) ? "text-ok" : "text-bad"}`}>{winners.has(f.id) ? "USE" : "DON'T USE"}</span>
                     tier {f.tier} · {f.doc_id}
                   </div>
@@ -163,7 +172,7 @@ function Conflicts({ brand }: { brand: BrandView }) {
                 </div>
               ))}
             </div>
-            {c.resolution.owner_note && <div className="mt-3 rounded-md bg-panel p-2 text-xs text-muted">Note for the document owner: {c.resolution.owner_note}</div>}
+            {c.resolution.owner_note && <div className="mt-3 rounded-md bg-panel p-2.5 text-[13px] text-muted">Note for the document owner: {c.resolution.owner_note}</div>}
           </div>
         );
       })}
@@ -174,16 +183,16 @@ function Conflicts({ brand }: { brand: BrandView }) {
 function Names({ brand }: { brand: BrandView }) {
   return (
     <div className="overflow-hidden rounded-xl bg-surface ring-1 ring-line">
-      <table className="w-full text-sm">
-        <thead className="bg-panel text-left text-xs text-muted">
-          <tr><th className="px-4 py-2">Current name</th><th className="px-4 py-2">Status</th><th className="px-4 py-2">Former names (flagged in copy)</th></tr>
+      <table className="w-full text-[15px]">
+        <thead className="bg-panel text-left text-[13px] text-muted">
+          <tr><th className="px-4 py-2.5">Current name</th><th className="px-4 py-2.5">Status</th><th className="px-4 py-2.5">Old names (blocked in new copy)</th></tr>
         </thead>
         <tbody className="divide-y divide-line">
           {(brand.entities ?? []).map((e) => (
             <tr key={e.current_name}>
-              <td className="px-4 py-2 font-semibold">{e.current_name}</td>
-              <td className="px-4 py-2 text-xs">{e.status}</td>
-              <td className="px-4 py-2 text-xs">{e.former_names.join(", ") || "–"}</td>
+              <td className="px-4 py-2.5 font-semibold">{e.current_name}</td>
+              <td className="px-4 py-2.5 text-[14px] text-ink/85">{e.status}</td>
+              <td className="px-4 py-2.5 text-[14px]">{e.former_names.join(", ") || "–"}</td>
             </tr>
           ))}
         </tbody>
@@ -197,7 +206,7 @@ function Images({ brand }: { brand: BrandView }) {
   const list = (brand.images ?? []).filter((i) => only === "all" || !i.usable);
   return (
     <div>
-      <div className="mb-3 flex gap-2 text-xs">
+      <div className="mb-3 flex gap-2 text-[13px]">
         <button onClick={() => setOnly("excluded")} className={`rounded-full px-3 py-1 ring-1 ${only === "excluded" ? "bg-ink text-on-ink ring-ink" : "ring-line"}`}>Excluded ({(brand.images ?? []).filter((i) => !i.usable).length})</button>
         <button onClick={() => setOnly("all")} className={`rounded-full px-3 py-1 ring-1 ${only === "all" ? "bg-ink text-on-ink ring-ink" : "ring-line"}`}>All ({brand.images?.length ?? 0})</button>
       </div>
@@ -206,7 +215,7 @@ function Images({ brand }: { brand: BrandView }) {
           <div key={i.id} className="overflow-hidden rounded-xl bg-surface ring-1 ring-line">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img src={`/api/images/${i.id}`} alt={i.id} className={`aspect-video w-full object-cover ${i.usable ? "" : "opacity-60 grayscale"}`} />
-            <div className="space-y-1 p-3 text-xs">
+            <div className="space-y-1 p-3 text-[13px] leading-relaxed">
               <div className="font-semibold">{String(i.meta.title ?? i.id)}</div>
               <div className="text-muted">{i.vision?.caption}</div>
               {!i.usable && <div className="font-medium text-bad">Excluded: {i.rules?.caution ?? (i.rules?.deprecated ? "deprecated" : "restricted")}</div>}
