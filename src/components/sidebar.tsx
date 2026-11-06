@@ -250,7 +250,7 @@ function CampaignRow({ c, active, onOpen, onRename, onDelete }: { c: CampaignLis
 
 function SideLink({ icon, label, onClick, disabled, hint }: { icon: React.ReactNode; label: string; onClick: () => void; disabled?: boolean; hint?: string }) {
   return (
-    <button onClick={onClick} disabled={disabled} title={hint} className="flex w-full items-center gap-2.5 truncate rounded-lg px-2.5 py-2 text-[13.5px] text-ink/85 hover:bg-ink/5 disabled:opacity-40">
+    <button onClick={onClick} disabled={disabled} title={hint} className="flex w-full items-center gap-2.5 truncate rounded-lg px-2.5 py-2 text-[13.5px] text-ink/85 hover:bg-ink/5 disabled:opacity-60">
       {icon}
       <span className="truncate">{label}</span>
     </button>

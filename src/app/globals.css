@@ -193,13 +193,20 @@ textarea,
 input {
   caret-color: var(--c-ink);
 }
+/* In an empty box the caret sits on the placeholder's first letter and blends into it; fading the
+   placeholder while the box has focus keeps the caret visible. */
+textarea:focus::placeholder,
+input:focus::placeholder {
+  opacity: 0.45;
+}
 .tabular {
   font-variant-numeric: tabular-nums;
 }
 /* Animated wallpapers: chrome turns to blurred glass over the scene. */
+/* Only the standard property: with both written, the CSS build kept just the -webkit- one, which
+   Chrome ignores, so the glass was plain see-through. The build adds prefixes itself. */
 .wall [data-glass] {
   backdrop-filter: blur(14px) saturate(1.15);
-  -webkit-backdrop-filter: blur(14px) saturate(1.15);
 }
 .wall body {
   background: transparent;

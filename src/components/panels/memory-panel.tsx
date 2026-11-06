@@ -59,7 +59,7 @@ export function MemoryPanel({ onClose }: { onClose: () => void }) {
               <ul className="divide-y divide-line overflow-hidden rounded-xl bg-surface ring-1 ring-line">
                 {list.map((m) => (
                   <li key={m.id} className="flex items-start gap-3 px-4 py-3 text-sm">
-                    <span className="mt-0.5 rounded bg-accent-soft px-1.5 py-0.5 text-[11px] font-semibold text-accent">{m.type}</span>
+                    <span className="mt-0.5 rounded bg-accent-soft px-1.5 py-0.5 text-[11px] font-semibold text-accent-ink">{m.type}</span>
                     <div className="min-w-0 flex-1">
                       {editing === m.id ? (
                         <input autoFocus value={editText} onChange={(e) => setEditText(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") { patch(m.id, { text: editText }); setEditing(null); } }} onBlur={() => setEditing(null)} className="w-full rounded bg-panel px-2 py-1 outline-none ring-1 ring-ink" />
