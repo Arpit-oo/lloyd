@@ -149,12 +149,20 @@ export async function handleMessage(campaignId: string, text: string, emit: Emit
         }
         // Anything else: drop the question and treat it as a new message.
       }
+      // A reply to the router's own clarifying question: route the original request with the answer, and never ask twice.
+      const clarify = campaign.data.pendingClarify;
+      if (clarify) store.updateCampaign(campaignId, { data: { pendingClarify: null } });
+      const routed = clarify
+        ? `${clarify.request}\n\n(You asked: "${clarify.question}" They answered: "${text}". Act now. If the answer doesn't settle it, e.g. "yes" to an either/or question, pick the option that fits the brief best and say which in the instruction.)`
+        : text;
       const route = await routeMessage(
-        { state: campaign.state, message: text, plan: campaign.data.plan, assets: store.listAssets(campaignId), recent: recentTranscript(campaignId, 8), brief: campaign.data.briefText, attachments: docs.map((d) => ({ name: d.name, text: d.text })) },
+        { state: campaign.state, message: routed, plan: campaign.data.plan, assets: store.listAssets(campaignId), recent: recentTranscript(campaignId, 8), brief: campaign.data.briefText, attachments: docs.map((d) => ({ name: d.name, text: d.text })) },
         ctx,
       );
-      if (route.needs_clarification) t.reply(route.needs_clarification);
-      else
+      if (route.needs_clarification && !clarify) {
+        store.updateCampaign(campaignId, { data: { pendingClarify: { request: text, question: route.needs_clarification } } });
+        t.reply(route.needs_clarification);
+      } else
         switch (route.action) {
           case "answer_questions":
             await planFromAnswers(brand, t, text);
@@ -163,13 +171,13 @@ export async function handleMessage(campaignId: string, text: string, emit: Emit
             await planFromAnswers(brand, t, defaultsText(t.data()));
             break;
           case "revise_plan":
-            await revise(brand, t, route.instruction ?? text);
+            await revise(brand, t, route.instruction ?? routed);
             break;
           case "approve_plan":
             await writeAll(brand, t);
             break;
           case "edit_assets":
-            await edit(brand, t, route.asset_ids, route.instruction ?? text);
+            await edit(brand, t, route.asset_ids, route.instruction ?? routed);
             break;
           case "undo_edit":
             undo(t, route.asset_ids);
@@ -414,7 +422,7 @@ function isPickOnly(text: string): boolean {
 
 /** A new or replacement brief before any asset is written: drop the old questions and plan, and start as a new campaign would. */
 async function restartFromBrief(brand: Brand, t: Turn, text: string, docs: DraftFile[], author?: string) {
-  store.updateCampaign(t.campaignId, { state: "new", data: { questions: undefined, answers: undefined, plan: undefined, brandCheck: undefined, pendingEdit: null, draftDocs: undefined, draftFiles: undefined } });
+  store.updateCampaign(t.campaignId, { state: "new", data: { questions: undefined, answers: undefined, plan: undefined, brandCheck: undefined, pendingEdit: null, pendingClarify: null, draftDocs: undefined, draftFiles: undefined } });
   t.emit({ type: "state", state: "new" });
   await handleNew(brand, t, text, docs, { hasRefs: false, author });
 }

@@ -129,6 +129,8 @@ export interface CampaignData {
   assetTypes?: import("./asset-types").AssetType[];
   /** An edit waiting for the marketer to confirm, because it goes against the brand (see confirm.ts). */
   pendingEdit?: import("./confirm").PendingEdit | null;
+  /** The router asked a clarifying question; the next message answers it and must not be asked again. */
+  pendingClarify?: { request: string; question: string } | null;
   /** Design from remembered preferences (e.g. "sky-blue theme"); new web assets and emails start from it when no reference sets one. */
   memoryStyle?: StyleRequest;
   /** Documents attached to a new campaign with a question about them; used as the brief once the marketer says go. */
