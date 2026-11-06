@@ -4,6 +4,20 @@ A local chat app where a marketer and an AI agent plan and write a campaign for 
 
 Chat on the left, assets on the right: LinkedIn and X posts, emails, blog posts and landing pages, drawn the way they'd look when published, in the brand's own colours and fonts. Every model call is logged with its exact prompt, tokens, cache hits and cost.
 
+```mermaid
+flowchart LR
+  F[["Brand folder<br/>84 messy docs + images"]] -->|"read once"| BL["Brand layer<br/>authority tiers · settled conflicts<br/>names · image rules · kernel"]
+  B["Brief"] --> A["Agent<br/>brand check → questions → plan"]
+  BL --> A
+  M["Memory<br/>style · truth · choice · fix"] --> A
+  A -->|you approve| W["Parallel writers<br/>only the context each asset needs"]
+  W --> G["Claim check<br/>hard rules in code + quoted evidence"]
+  G --> O["Campaign<br/>posts · emails · blogs · landing pages"]
+  O -->|edits, 'we're done'| M
+```
+
+More diagrams (state machine, routing, claim check, retrieval, memory, models, data model) are in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
+
 ## Run it
 
 Requires **Node 22+** (see `.nvmrc`).

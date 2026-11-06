@@ -10,7 +10,13 @@ Lloyd is one Next.js process: React UI, API routes, and an agent library in the 
 - [6. Prompt layers and caching](#6-prompt-layers-and-caching)
 - [7. Data model](#7-data-model)
 - [8. Shared chats: live sync](#8-shared-chats-live-sync)
-- [9. Code map](#9-code-map)
+- [9. Which document wins](#9-which-document-wins)
+- [10. Retrieval at write time](#10-retrieval-at-write-time)
+- [11. Writing and the claim check](#11-writing-and-the-claim-check)
+- [12. Routing a chat message](#12-routing-a-chat-message)
+- [13. Memory lifecycle](#13-memory-lifecycle)
+- [14. Models per step](#14-models-per-step)
+- [15. Code map](#15-code-map)
 
 ## 1. System overview
 
@@ -251,7 +257,135 @@ sequenceDiagram
 
 There are no accounts: anyone who can reach the machine on the network can open the link and use the API key. The Share panel says so.
 
-## 9. Code map
+## 9. Which document wins
+
+Brand folders contradict themselves. Ingest decides once which document outranks which, then settles every contradiction with that order. A file called `FINAL` or a newer date only breaks ties.
+
+```mermaid
+flowchart TD
+  D[["84 documents"]] --> C["Doc cards<br/>type · status · date · channels<br/>what it claims about itself ('replaces X', 'FINAL')"]
+  C --> G{"Governance"}
+  G -->|1. explicit rules in the folder| T["Tier per document<br/>1 = legal · 2 = guidelines · … · 4 = sales notes"]
+  G -->|2. document type| T
+  G -->|3. date / 'FINAL' only as tie-break| T
+  T --> F["Facts<br/>~2,300 atomic claims, each with its quote"]
+  F --> Grp["Group facts about the same thing<br/>from different documents"]
+  F --> Aud["Audit risky low-tier claims<br/>(e.g. 'FedRAMP Authorized' in sales notes)"]
+  Grp --> S{"Settle by tier"}
+  Aud --> S
+  S -->|winner| K["Kernel + brand check<br/>'use' with the quote"]
+  S -->|loser| X["Never-say list<br/>'ignore' with the quote"]
+  E["Entities<br/>Tallowatch → Evenburn"] --> R["Retired-name check<br/>in code, word boundaries"]
+```
+
+## 10. Retrieval at write time
+
+The kernel is always in the prompt; everything else is looked up per asset. Two searches are fused so exact names and paraphrases both hit, and filters keep old campaign copy from posing as rules.
+
+```mermaid
+flowchart LR
+  Q["Query<br/>(plan item · claim · paragraph)"] --> B["BM25 · SQLite FTS5<br/>exact names, numbers, rule words"]
+  Q --> V["Embeddings<br/>paraphrases"]
+  B --> RRF["Reciprocal rank fusion"]
+  V --> RRF
+  Flt["Filters from doc cards<br/>doc type · channel · tier 1–2 only"] --> RRF
+  RRF --> W["Writer context<br/>~25 facts · playbook · persona<br/>past examples marked STYLE ONLY"]
+  RRF --> CC["Claim check evidence<br/>one query per paragraph<br/>round-robin so no paragraph starves"]
+```
+
+## 11. Writing and the claim check
+
+Every asset is written in parallel from a shared, pre-warmed cache prefix, then checked twice: hard rules in code, judgment by a model that must quote both the copy and the rule. A blocking issue gets one automatic fix and a re-check; anything left is shown, never hidden.
+
+```mermaid
+flowchart TD
+  P["Approved plan"] --> PW["Prewarm cache<br/>one per asset type with 2+ assets"]
+  PW --> W1["Writer · asset 1"] & W2["Writer · asset 2"] & W3["Writer · asset n"]
+  W1 & W2 & W3 --> G
+  subgraph G["Claim check, per asset"]
+    direction TB
+    Code["In code<br/>X ≤ 280 chars · LinkedIn ≤ 3,000<br/>internal target numbers · retired names<br/>image usage rules"]
+    Model["Model<br/>claims · proof · names · tone<br/>evidence retrieved per paragraph"]
+  end
+  G -->|pass / warn| Done["Shown with Checks + Sources tabs"]
+  G -->|block| Fix["Automatic fix<br/>smallest edit, new version"]
+  Fix --> G2["Re-check once"]
+  G2 --> Done
+```
+
+## 12. Routing a chat message
+
+After the first brief, every message is routed to one action the current state allows. Two loops are closed in code: a reply to "are you sure?" is matched before routing, and a reply to the router's own clarifying question is routed together with the original request, so the same question is never asked twice.
+
+```mermaid
+flowchart TD
+  M["New message"] --> PE{"Pending<br/>'are you sure?'"}
+  PE -->|"yes / only where allowed"| Run
+  PE -->|cancel| Keep["Leave as is"]
+  PE -->|"none, or another message"| PC{"Pending<br/>clarifying question?"}
+  PC -->|"yes, and not a button click"| Join["Original request<br/>+ question + this answer<br/>(must act now)"]
+  PC -->|no| R
+  Join --> R["Router (fast tier)<br/>action · asset ids · instruction"]
+  R --> Allowed{"Action allowed<br/>in this state?"}
+  Allowed -->|no| Chat["Chat reply"]
+  Allowed -->|yes| Amb{"Needs clarification<br/>and not already asked?"}
+  Amb -->|yes| Ask["Ask once<br/>store pendingClarify"]
+  Amb -->|no| Act["answer_questions · use_defaults · revise_plan<br/>approve_plan · edit_assets · undo_edit<br/>finish_campaign · remember · new_brief · chat"]
+  Act -->|revise_plan / edit_assets| RC{"Request check<br/>against brand rules"}
+  RC -->|go| Run["Apply"]
+  RC -->|confirm| Sure["Ask 'are you sure?'<br/>store pendingEdit"]
+```
+
+## 13. Memory lifecycle
+
+Memory is small and visible. Nothing becomes active without the marketer, except what they explicitly asked to remember. Campaign-only exceptions never become memories.
+
+```mermaid
+stateDiagram-v2
+  [*] --> proposed: "we're done" → extractor proposes<br/>(style · truth · choice · fix)
+  [*] --> active: "remember this" → saved at once
+  proposed --> active: Keep
+  proposed --> archived: Forget
+  active --> archived: Forget
+  archived --> active: Keep
+  active --> [*]: Delete
+  archived --> [*]: Delete
+  note right of active
+    All active memories for the brand go into
+    every new campaign, pinned first, capped.
+    The questions card lists the ones used.
+  end note
+  note left of proposed
+    Brief overrides are filtered out
+    in code (embedding similarity)
+    as well as in the prompt.
+  end note
+```
+
+## 14. Models per step
+
+Steps ask for a tier, not a model, so the campaign's model picker can swap models without touching the steps. Every call is priced and logged, which is what the Inspector's *Cost by step* shows.
+
+```mermaid
+flowchart LR
+  subgraph writer["writer · gpt-6.1-sol"]
+    w1[assets] --- w2[edits] --- w3[free-form pages]
+  end
+  subgraph reasoner["reasoner · gpt-6.1-sol"]
+    r1[brand check] --- r2[questions] --- r3[plan] --- r4[governance · kernel]
+  end
+  subgraph fast["fast · gpt-6.1-terra"]
+    f1[intake] --- f2[router] --- f3[request check] --- f4[claim check] --- f5[memory]
+  end
+  subgraph bulk["bulk · gpt-6-luna"]
+    b1[doc cards] --- b2[image rules]
+  end
+  writer & reasoner & fast & bulk --> GW["LLM gateway<br/>cache breakpoints · spend cap · Stop · log"]
+  GW --> L[("llm_calls<br/>tokens · cache hits · cost per step")]
+  L --> I["Inspector → Cost by step"]
+```
+
+## 15. Code map
 
 | Path | What lives there |
 |---|---|
